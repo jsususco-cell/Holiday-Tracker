@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appendToSheet, type SheetRow } from "@/lib/sheet";
-import { addCompOff, resolveEmployee } from "@/lib/zoho";
+import { creditLeaveBalance, resolveEmployee } from "@/lib/zoho";
 import {
   ACTION_LABELS,
   HOLIDAY_TYPE_LABELS,
@@ -91,25 +91,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2) If earning a holiday credit, also create a Zoho comp-off credit.
+  // 2) If earning a holiday credit, credit the "Holiday Leave Credits" balance.
   let zoho: { ok: boolean; detail?: unknown; error?: string } | null = null;
   if (wantsCredit) {
     try {
+      const leaveTypeId = process.env.ZOHO_LEAVETYPE_HOLIDAY_CREDIT_ID;
+      if (!leaveTypeId) {
+        throw new Error("ZOHO_LEAVETYPE_HOLIDAY_CREDIT_ID is not configured.");
+      }
+      const hoursPerCredit = Number(process.env.HOLIDAY_CREDIT_HOURS || "8");
+
       let employeeId = body.employeeId;
       if (!employeeId) {
         const emp = await resolveEmployee(body.employeeEmail);
         if (!emp) throw new Error("Could not resolve Zoho employee id from email.");
         employeeId = emp.id;
       }
-      const detail = await addCompOff({
+      const detail = await creditLeaveBalance({
         employeeId,
-        workedDateISO: body.holidayDate,
-        credited: 1,
-        reason: `Worked ${HOLIDAY_TYPE_LABELS[holidayType]}: ${body.holidayName}`,
+        leaveTypeId,
+        count: hoursPerCredit,
+        effectiveISO: body.holidayDate,
       });
       zoho = { ok: true, detail };
     } catch (err) {
-      // The sheet row is already saved; report Zoho failure without losing it.
+      // The sheet row is already saved; report the Zoho failure without losing it.
       zoho = { ok: false, error: (err as Error).message };
     }
   }

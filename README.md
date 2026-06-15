@@ -27,18 +27,24 @@ All secrets (Zoho client secret / refresh token, the sheet webhook URL) live
 
 ### How the credit maps to Zoho
 
-The Summary sheet's **Accumulated / Used / Balance** columns are exactly Zoho
-People's **Compensatory-Off** semantics:
+"Earn Holiday Credit" credits the **"Holiday Leave Credits"** leave type's
+balance (Available) directly — via the Add Leave Balance API, NOT the
+Compensatory-Off module.
 
-| Sheet column | Driven by | Zoho |
-|---|---|---|
-| Accumulated Flexi-Holiday Credits | Report to Work → Earn Holiday Credit | Comp-Off **credit** (`POST /api/v3/leave-tracker/compensatory`) |
-| Used Flexi-holiday credit | Take Day Off (drawing on a credit) | Comp-Off **availed** (logged to sheet; see note) |
-| Balance | accumulated − used | Comp-Off balance |
+| Action | Zoho effect |
+|---|---|
+| Report to Work → Earn Holiday Credit | `POST /api/leave/addBalance` → +`HOLIDAY_CREDIT_HOURS` to the `ZOHO_LEAVETYPE_HOLIDAY_CREDIT_ID` leave type |
+| Report to Work → Double Pay | none (sheet only) |
+| Take Day Off | none (sheet only) |
 
-> Per the current spec, **only "Earn Holiday Credit" writes to Zoho.** "Take Day
-> Off" is logged to the sheet only. If you also want *using* a credit to draw
-> down the Zoho Comp-Off balance, say so and we'll add the avail call.
+- The leave type is measured in **Hours**, so one earned credit adds
+  `HOLIDAY_CREDIT_HOURS` (default 8 = one workday).
+- `addBalance` is **not idempotent** — submitting the same worked date twice
+  credits twice. (Comp-Off would dedupe, but it's a separate module that doesn't
+  feed this leave type, so we credit the balance directly instead.)
+- Only "Earn Holiday Credit" writes to Zoho. To make "Take Day Off" *book*
+  against this leave type (drawing the balance down), say so and we'll wire it
+  to the Add-Leave API.
 
 ## Architecture
 
@@ -67,10 +73,12 @@ Google Sheet (Apps Script)            Zoho People (people.zoho.com)
    npm run zoho:token -- PASTE_THE_CODE
    ```
    Paste the printed `ZOHO_REFRESH_TOKEN=...` into `.env.local`.
-4. Make sure **Compensatory Off** is enabled in Zoho People (Leave settings).
-   Note: the integration uses the **v3** comp-off API with `dd-MMM-yyyy` dates
-   (the v2 endpoint silently no-ops on this account). Adding the same worked
-   date twice for an employee returns "Date is already added" — expected.
+4. Find the **"Holiday Leave Credits"** leave type id and set
+   `ZOHO_LEAVETYPE_HOLIDAY_CREDIT_ID`:
+   ```bash
+   npm run zoho:leavetypes -- admin@byrdsonservices.com
+   ```
+   (Look for the entry whose `Name` is "Holiday Leave Credits" and copy its `Id`.)
 
 ### B. Google Sheet receiver
 
@@ -100,7 +108,7 @@ Connect the GitHub repo in the Vercel dashboard, add the same env vars under
 - `lib/actions.ts` — action model + helpers
 - `lib/holidays.ts` — Nager.Date PH holidays (cached)
 - `lib/sheet.ts` — POST to the Apps Script web app
-- `lib/zoho.ts` — OAuth refresh, employee lookup, Comp-Off, leave insert
+- `lib/zoho.ts` — OAuth refresh, employee lookup, creditLeaveBalance, leave insert
 - `google-apps-script/Code.gs` — the sheet receiver to deploy
 - `scripts/get-refresh-token.mjs` — one-time refresh-token bootstrap
 - `scripts/list-leave-types.mjs` — discover leave type IDs (diagnostics)

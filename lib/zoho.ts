@@ -283,67 +283,63 @@ function extractFirstEmployeeRecord(result: unknown): ZohoEmployee | null {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Compensatory Off (holiday credit)
+ * Holiday Leave Credit (credit a leave-type balance)
  * ──────────────────────────────────────────────────────────────────────── */
 
-export type CompOffInput = {
-  employeeId: string; // numeric Zoho record id
-  workedDateISO: string; // YYYY-MM-DD the holiday was worked
-  credited?: number; // days credited (default 1)
-  expiryISO?: string; // optional expiry; default +1 year
-  reason?: string;
+export type CreditLeaveInput = {
+  employeeId: string; // numeric Zoho record id (EmpErecno)
+  leaveTypeId: string; // the leave type to credit (e.g. "Holiday Leave Credits")
+  count: number; // amount in the leave type's unit (Hours here); +adds, -subtracts
+  effectiveISO: string; // YYYY-MM-DD the credit applies on (the worked date)
 };
 
 /**
- * Add a Compensatory-Off credit ("Earn Holiday Credit").
+ * Credit (or debit) an employee's balance for a specific leave type.
  *
- * Uses the **v3** API: POST /people/api/v3/leave-tracker/compensatory
- * (scope ZohoPeople.leave.CREATE). The v2 endpoint silently no-ops on this
- * account, so v3 is required. Dates MUST be in the org default `dd-MMM-yyyy`
- * format; other formats return an INVALID_INPUT error.
+ * POST /people/api/leave/addBalance?balanceData=...&dateFormat=dd-MMM-yyyy
+ * (scope ZohoPeople.leave.ALL). This is how "Earn Holiday Credit" raises the
+ * "Holiday Leave Credits" Available balance — NOT the Compensatory-Off module.
  *
- * Returns { compensatory_id } on success.
+ * NOTE: addBalance is not idempotent — it has no per-date dedupe, so calling it
+ * twice for the same worked date credits twice. Guard against double-submits at
+ * the caller if needed.
  */
-export async function addCompOff(
-  input: CompOffInput,
-): Promise<{ compensatory_id?: string; message?: string }> {
-  const workedDate = toZohoDate(input.workedDateISO); // dd-MMM-yyyy
-  const expiryDate = toZohoDate(
-    input.expiryISO ??
-      (() => {
-        const d = new Date(`${input.workedDateISO}T00:00:00Z`);
-        d.setUTCFullYear(d.getUTCFullYear() + 1);
-        return d.toISOString().slice(0, 10);
-      })(),
-  );
-
-  const form = new URLSearchParams({
-    employee_zoho_id: input.employeeId,
-    worked_date: workedDate,
-    unit: "Days",
-    duration: "FULL_DAY",
-    expiry_date: expiryDate,
+export async function creditLeaveBalance(
+  input: CreditLeaveInput,
+): Promise<{ addedCount: number; errorCount: number }> {
+  const date = toZohoDate(input.effectiveISO); // dd-MMM-yyyy
+  const balanceData = JSON.stringify({
+    [input.employeeId]: {
+      [input.leaveTypeId]: { date, count: String(input.count) },
+    },
   });
-  if (input.reason) form.set("reason", input.reason);
 
-  const res = await zohoFetch("/people/api/v3/leave-tracker/compensatory", {
+  const res = await zohoFetch("/people/api/leave/addBalance", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
+    query: { balanceData, dateFormat: "dd-MMM-yyyy" },
   });
 
   const text = await res.text();
-  let data: { data?: { compensatory_id?: string }; message?: string; status?: string; code?: string } = {};
+  let data: {
+    response?: {
+      result?: { addedCount?: number; errorCount?: number };
+      status?: number;
+      message?: string;
+    };
+  } = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    /* non-JSON body */
+    /* non-JSON */
   }
 
-  if (!res.ok || data.status === "error") {
+  const result = data.response?.result;
+  const added = result?.addedCount ?? 0;
+  const errors = result?.errorCount ?? 0;
+  if (!res.ok || added < 1 || errors > 0) {
     throw new Error(
-      `addCompOff failed (${res.status}): ${data.message || data.code || text.slice(0, 200) || "empty response"}`,
+      `creditLeaveBalance failed (${res.status}): ${data.response?.message || text.slice(0, 200) || "no records added"}`,
     );
   }
-  return { compensatory_id: data.data?.compensatory_id, message: data.message };
+  return { addedCount: added, errorCount: errors };
 }
