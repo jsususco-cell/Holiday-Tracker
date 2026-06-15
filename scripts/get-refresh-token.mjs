@@ -14,7 +14,7 @@
  * Reads ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET / ZOHO_ACCOUNTS_DOMAIN from
  * .env.local (or the environment).
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -73,6 +73,18 @@ if (!res.ok || !data.refresh_token) {
   process.exit(1);
 }
 
-console.log("\n✅ Success. Add this line to your .env.local:\n");
-console.log(`ZOHO_REFRESH_TOKEN=${data.refresh_token}\n`);
-console.log("(Access token also returned, valid ~1h — the app refreshes it automatically.)");
+// Write directly into .env.local so the secret is never printed/handled.
+const envPath = join(__dirname, "..", ".env.local");
+try {
+  let env = readFileSync(envPath, "utf8");
+  if (/^ZOHO_REFRESH_TOKEN=.*$/m.test(env)) {
+    env = env.replace(/^ZOHO_REFRESH_TOKEN=.*$/m, `ZOHO_REFRESH_TOKEN=${data.refresh_token}`);
+  } else {
+    env += `\nZOHO_REFRESH_TOKEN=${data.refresh_token}\n`;
+  }
+  writeFileSync(envPath, env);
+  console.log("\n✅ Success. ZOHO_REFRESH_TOKEN written to .env.local (value not printed).");
+} catch (e) {
+  console.log("\n✅ Got the refresh token, but couldn't write .env.local:", e.message);
+  console.log("Add this line manually:\nZOHO_REFRESH_TOKEN=" + data.refresh_token);
+}

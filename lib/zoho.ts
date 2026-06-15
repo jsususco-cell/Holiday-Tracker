@@ -267,7 +267,12 @@ function extractFirstEmployeeRecord(result: unknown): ZohoEmployee | null {
             f.EmployeeName ||
             f.FullName ||
             "";
-          const id = f.Zoho_ID || f.recordId || f.EmployeeID || key;
+          // IMPORTANT: the record's string key is the Zoho record id with full
+          // precision. f.Zoho_ID is a JSON number and loses precision beyond
+          // 2^53, so never use it for the id — prefer the key.
+          const id = /^\d{6,}$/.test(key)
+            ? key
+            : f.recordId || f.EmployeeID || String(f.Zoho_ID || "");
           const mail = f.EmailID || f.EmailId || f.Email || "";
           if (id) return { id: String(id), name, email: mail };
         }
