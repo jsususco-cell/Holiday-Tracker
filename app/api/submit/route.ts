@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendToSheet, type SheetRow } from "@/lib/sheet";
-import { creditLeaveBalance, resolveEmployee } from "@/lib/zoho";
+import { appendToSheet, registerPendingCredit, type SheetRow } from "@/lib/sheet";
+import { resolveEmployee } from "@/lib/zoho";
 import {
   ACTION_LABELS,
   HOLIDAY_TYPE_LABELS,
@@ -99,39 +99,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2) If earning a holiday credit, credit the "Holiday Leave Credits" balance.
-  let zoho: { ok: boolean; detail?: unknown; error?: string } | null = null;
+  // 2) If earning a holiday credit, DON'T credit Zoho now. Register it as
+  // pending — the reconcile job posts the credit only after the holiday date
+  // has passed AND the employee's attendance that day is >= 8h.
+  let pending: { ok: boolean; error?: string } | null = null;
   if (wantsCredit) {
     try {
-      const leaveTypeId = process.env.ZOHO_LEAVETYPE_HOLIDAY_CREDIT_ID;
-      if (!leaveTypeId) {
-        throw new Error("ZOHO_LEAVETYPE_HOLIDAY_CREDIT_ID is not configured.");
-      }
       const hoursPerCredit = Number(process.env.HOLIDAY_CREDIT_HOURS || "8");
-
       let employeeId = body.employeeId;
       if (!employeeId) {
         const emp = await resolveEmployee(body.employeeEmail);
         if (!emp) throw new Error("Could not resolve Zoho employee id from email.");
         employeeId = emp.id;
       }
-      const detail = await creditLeaveBalance({
+      await registerPendingCredit({
+        key: `${employeeId}__${body.holidayDate}`,
+        workedDate: body.holidayDate,
         employeeId,
-        leaveTypeId,
-        count: hoursPerCredit,
-        effectiveISO: body.holidayDate,
+        employeeEmail: body.employeeEmail,
+        employeeName: body.employeeName || "",
+        holidayName: body.holidayName,
+        hours: hoursPerCredit,
       });
-      zoho = { ok: true, detail };
+      pending = { ok: true };
     } catch (err) {
-      // The sheet row is already saved; report the Zoho failure without losing it.
-      zoho = { ok: false, error: (err as Error).message };
+      pending = { ok: false, error: (err as Error).message };
     }
   }
 
   return NextResponse.json({
     ok: true,
     sheet: { ok: true },
-    zoho,
     creditEarned: wantsCredit,
+    pending,
   });
 }

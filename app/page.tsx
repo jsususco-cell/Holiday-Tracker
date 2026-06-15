@@ -162,11 +162,11 @@ function HolidayForm({
 
       let text = "Submitted — saved to the spreadsheet.";
       if (data.creditEarned) {
-        text = data.zoho?.ok
-          ? "Submitted — saved to the spreadsheet and holiday credit added to Zoho People."
-          : `Saved to the spreadsheet, but the Zoho credit failed: ${data.zoho?.error}`;
+        text = data.pending?.ok
+          ? "Submitted. Your holiday credit is recorded and will post to Zoho People after the holiday, once your attendance for that day is 8 hours or more."
+          : `Saved to the spreadsheet, but registering the pending credit failed: ${data.pending?.error}`;
       }
-      setMsg({ ok: data.creditEarned ? !!data.zoho?.ok : true, text });
+      setMsg({ ok: data.creditEarned ? !!data.pending?.ok : true, text });
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message });
     } finally {

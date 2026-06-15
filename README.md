@@ -39,12 +39,22 @@ Compensatory-Off module.
 
 - The leave type is measured in **Hours**, so one earned credit adds
   `HOLIDAY_CREDIT_HOURS` (default 8 = one workday).
-- `addBalance` is **not idempotent** — submitting the same worked date twice
-  credits twice. (Comp-Off would dedupe, but it's a separate module that doesn't
-  feed this leave type, so we credit the balance directly instead.)
-- Only "Earn Holiday Credit" writes to Zoho. To make "Take Day Off" *book*
-  against this leave type (drawing the balance down), say so and we'll wire it
-  to the Add-Leave API.
+
+### Deferred crediting (the credit posts later, not on submit)
+
+Earn-Holiday-Credit does **not** credit Zoho at submit time. Instead:
+
+1. Submit registers a row in the **`PendingCredits`** sheet tab (status `PENDING`).
+2. A daily job — `GET /api/reconcile-credits` (Vercel Cron, see `vercel.json`) —
+   posts the credit only when **both** hold:
+   - the holiday date has **passed** (`workedDate < today`), and
+   - the employee's **attendance that day ≥ 8h** (Zoho `getUserReport`,
+     scope `ZohoPeople.attendance.ALL`).
+3. On success it credits `HOLIDAY_CREDIT_HOURS` and flips the row to `CREDITED`.
+
+Requests that don't yet qualify stay `PENDING` and are re-checked next run
+(so late attendance entries still get caught). The `PendingCredits` key is
+`<employeeId>__<workedDate>`, so a credit posts at most once per worked day.
 
 ## Architecture
 

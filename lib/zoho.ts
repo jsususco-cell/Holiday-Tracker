@@ -343,3 +343,42 @@ export async function creditLeaveBalance(
   }
   return { addedCount: added, errorCount: errors };
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Attendance
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Parse a Zoho "HH:MM" duration into decimal hours. */
+function parseHHMM(v: unknown): number {
+  if (typeof v !== "string" || !v.includes(":")) return 0;
+  const [h, m] = v.split(":").map((n) => parseInt(n, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return 0;
+  return h + m / 60;
+}
+
+/**
+ * Working hours an employee logged on a given date, from the attendance
+ * User Report (scope ZohoPeople.attendance.ALL). Returns decimal hours (0 if
+ * none / absent).
+ */
+export async function getWorkingHours(
+  erecno: string,
+  dateISO: string,
+): Promise<number> {
+  const d = toZohoDate(dateISO); // dd-MMM-yyyy
+  const res = await zohoFetch("/people/api/attendance/getUserReport", {
+    method: "GET",
+    query: { sdate: d, edate: d, erecno, dateFormat: "dd-MMM-yyyy" },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`getUserReport failed: ${JSON.stringify(data).slice(0, 200)}`);
+  }
+  // Response is keyed by "YYYY-MM-DD" → { WorkingHours, TotalHours, Status }.
+  const day =
+    (data?.[dateISO] as Record<string, unknown> | undefined) ??
+    (Object.values(data || {})[0] as Record<string, unknown> | undefined);
+  if (!day) return 0;
+  // Prefer WorkingHours; fall back to TotalHours.
+  return parseHHMM(day.WorkingHours) || parseHHMM(day.TotalHours);
+}

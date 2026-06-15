@@ -30,6 +30,19 @@ Submissions are split by holiday type:
 
 If a tab is missing it's created automatically with its own headers.
 
+### PendingCredits tab
+
+Earn-Holiday-Credit submissions are queued in a **`PendingCredits`** tab
+(created automatically) instead of crediting Zoho immediately. The script also
+serves this queue to the app:
+
+- `POST {kind:"pending", pending:{…}}` — add a pending credit (deduped by `Key`)
+- `GET ?action=pending&secret=…` — list rows still `PENDING`
+- `POST {kind:"mark", key, status, note}` — flip a row to `CREDITED` / etc.
+
+The app's daily reconcile job reads this queue, checks attendance, posts the
+credit, and marks the row.
+
 ## Notes
 
 - Because it runs **as you**, it can write to the sheet without a service

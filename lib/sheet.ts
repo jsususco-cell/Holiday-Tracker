@@ -54,3 +54,76 @@ export async function appendToSheet(row: SheetRow): Promise<void> {
     );
   }
 }
+
+/* ── Pending-credit queue (PendingCredits tab) ── */
+
+function webhookUrl(): string {
+  const url = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!url) throw new Error("Missing GOOGLE_SHEET_WEBHOOK_URL.");
+  return url;
+}
+const SECRET = () => process.env.GOOGLE_SHEET_WEBHOOK_SECRET || "";
+
+export type PendingCredit = {
+  key: string; // unique: `${employeeId}__${workedDate}`
+  workedDate: string; // YYYY-MM-DD
+  employeeId: string; // Zoho erecno
+  employeeEmail: string;
+  employeeName: string;
+  holidayName: string;
+  hours: number;
+};
+
+async function postWebhook(payload: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(webhookUrl(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret: SECRET(), ...payload }),
+    cache: "no-store",
+    redirect: "follow",
+  });
+  const text = await res.text();
+  let parsed: { ok?: boolean; error?: string } = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* non-JSON */
+  }
+  if (!res.ok || parsed.ok === false) {
+    throw new Error(`Webhook failed (${res.status}): ${parsed.error || text.slice(0, 200)}`);
+  }
+  return parsed;
+}
+
+/** Register a holiday credit to be posted later (idempotent by key). */
+export async function registerPendingCredit(p: PendingCredit): Promise<void> {
+  await postWebhook({ kind: "pending", pending: p });
+}
+
+/** List all PENDING credit rows from the sheet. */
+export async function listPendingCredits(): Promise<PendingCredit[]> {
+  const url = new URL(webhookUrl());
+  url.searchParams.set("action", "pending");
+  url.searchParams.set("secret", SECRET());
+  const res = await fetch(url.toString(), { cache: "no-store", redirect: "follow" });
+  const text = await res.text();
+  let parsed: { ok?: boolean; rows?: PendingCredit[]; error?: string } = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* non-JSON */
+  }
+  if (!res.ok || parsed.ok === false) {
+    throw new Error(`List pending failed (${res.status}): ${parsed.error || text.slice(0, 200)}`);
+  }
+  return parsed.rows || [];
+}
+
+/** Mark a pending credit row (CREDITED / NO_CREDIT / …) with a note. */
+export async function markPendingCredit(
+  key: string,
+  status: string,
+  note: string,
+): Promise<void> {
+  await postWebhook({ kind: "mark", key, status, note });
+}
