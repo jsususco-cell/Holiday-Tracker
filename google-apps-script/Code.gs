@@ -20,7 +20,8 @@
 var REGULAR_SHEET_NAME = "RegularRawData";
 var SPECIAL_SHEET_NAME = "SpecialRawData";
 
-var HEADERS = [
+// Regular Holiday layout (full).
+var REGULAR_HEADERS = [
   "Date of Filing",
   "Holiday Name",
   "Employee Name",
@@ -31,6 +32,17 @@ var HEADERS = [
   "To Date",
   "Notes",
   "Approved?",
+];
+
+// Special Non-Working layout (no credit / benefit / approved columns).
+var SPECIAL_HEADERS = [
+  "Date of Filing",
+  "Holiday Name",
+  "Employee Name",
+  "Choose your Action",
+  "From Date (Original Holiday)",
+  "To Date",
+  "Notes",
 ];
 
 function doPost(e) {
@@ -53,21 +65,37 @@ function doPost(e) {
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
-      sheet.appendRow(HEADERS);
+      sheet.appendRow(isSpecial ? SPECIAL_HEADERS : REGULAR_HEADERS);
     }
 
-    sheet.appendRow([
-      row.dateOfFiling || "",
-      row.holidayName || "",
-      row.employeeName || "",
-      row.action || "",
-      row.useFlexiCredit || "",
-      row.workBenefit || row.holidayType || "",
-      row.fromDate || "",
-      row.toDate || "",
-      row.notes || "",
-      "", // Approved? — left blank for HR
-    ]);
+    var values;
+    if (isSpecial) {
+      // Date of Filing | Holiday Name | Employee Name | Choose your Action |
+      // From Date (Original Holiday) | To Date | Notes
+      values = [
+        row.dateOfFiling || "",
+        row.holidayName || "",
+        row.employeeName || "",
+        row.action || "",
+        row.fromDate || "",
+        row.toDate || "",
+        row.notes || "",
+      ];
+    } else {
+      values = [
+        row.dateOfFiling || "",
+        row.holidayName || "",
+        row.employeeName || "",
+        row.action || "",
+        row.useFlexiCredit || "",
+        row.workBenefit || row.holidayType || "",
+        row.fromDate || "",
+        row.toDate || "",
+        row.notes || "",
+        "", // Approved? — left blank for HR
+      ];
+    }
+    sheet.appendRow(values);
 
     return json_({ ok: true, sheet: sheetName });
   } catch (err) {

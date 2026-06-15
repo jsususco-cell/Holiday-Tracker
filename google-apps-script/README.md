@@ -20,10 +20,15 @@ to your [Holiday Tracker sheet](https://docs.google.com/spreadsheets/d/10ShAanTg
 
 Submissions are split by holiday type:
 
-- **Regular Holiday** → `RegularRawData` tab
-- **Special Non-Working Holiday** → `SpecialRawData` tab
+- **Regular Holiday** → `RegularRawData` tab — full layout:
+  `Date of Filing | Holiday Name | Employee Name | Choose your Action |
+  Use Flexi-Holiday Credit | Benefit | From Date (Original Holiday) | To Date |
+  Notes | Approved?`
+- **Special Non-Working Holiday** → `SpecialRawData` tab — trimmed layout:
+  `Date of Filing | Holiday Name | Employee Name | Choose your Action |
+  From Date (Original Holiday) | To Date | Notes`
 
-If a tab is missing it's created automatically with the standard headers.
+If a tab is missing it's created automatically with its own headers.
 
 ## Notes
 
