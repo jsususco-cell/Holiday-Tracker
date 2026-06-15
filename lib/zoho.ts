@@ -202,3 +202,124 @@ export async function insertLeave(input: InsertLeaveInput): Promise<unknown> {
   }
   return data;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Employee lookup
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type ZohoEmployee = {
+  id: string; // numeric record id (used by the comp-off API's `employee` field)
+  name: string;
+  email: string;
+};
+
+/**
+ * Resolve a Zoho People employee by email. Used for sign-in verification and
+ * to get the numeric record id required by the comp-off API.
+ *
+ * Implementation note: field/view names vary per Zoho account. This uses the
+ * Employee form fetchRecords search; override the searchable field name via
+ * ZOHO_EMP_EMAIL_FIELD if your account differs (default "EmailID").
+ */
+export async function resolveEmployee(
+  email: string,
+): Promise<ZohoEmployee | null> {
+  const emailField = process.env.ZOHO_EMP_EMAIL_FIELD || "EmailID";
+  const searchParams = JSON.stringify({
+    searchField: emailField,
+    searchOperator: "Is",
+    searchText: email,
+  });
+
+  const res = await zohoFetch("/people/api/forms/employee/getRecords", {
+    method: "GET",
+    query: { searchParams, sIndex: "1", rec_limit: "1" },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(
+      `resolveEmployee failed: ${JSON.stringify(data).slice(0, 300)}`,
+    );
+  }
+
+  // Zoho returns a nested {response:{result:[{<recordId>:[{...fields...}]}]}}
+  // shape that varies; dig out the first record defensively.
+  const result =
+    data?.response?.result ?? data?.result ?? (Array.isArray(data) ? data : null);
+  const record = extractFirstEmployeeRecord(result);
+  if (!record) return null;
+  return record;
+}
+
+function extractFirstEmployeeRecord(result: unknown): ZohoEmployee | null {
+  if (!result) return null;
+
+  // Common shape: [{ "<recordId>": [ { FirstName, LastName, EmailID, ... } ] }]
+  const rows = Array.isArray(result) ? result : [result];
+  for (const row of rows) {
+    if (row && typeof row === "object") {
+      for (const [key, val] of Object.entries(row as Record<string, unknown>)) {
+        const fields = Array.isArray(val) ? val[0] : val;
+        if (fields && typeof fields === "object") {
+          const f = fields as Record<string, string>;
+          const name =
+            [f.FirstName, f.LastName].filter(Boolean).join(" ").trim() ||
+            f.EmployeeName ||
+            f.FullName ||
+            "";
+          const id = f.Zoho_ID || f.recordId || f.EmployeeID || key;
+          const mail = f.EmailID || f.EmailId || f.Email || "";
+          if (id) return { id: String(id), name, email: mail };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Compensatory Off (holiday credit)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type CompOffInput = {
+  employeeId: string; // numeric Zoho record id
+  workedDateISO: string; // YYYY-MM-DD the holiday was worked
+  credited?: number; // days credited (default 1)
+  expiryISO?: string; // optional expiry; default +1 year
+  reason?: string;
+};
+
+/**
+ * Add a Compensatory-Off credit ("Earn Holiday Credit").
+ * POST /people/api/v2/leavetracker/compensatory/records  (scope leave.CREATE)
+ */
+export async function addCompOff(input: CompOffInput): Promise<unknown> {
+  const expiry =
+    input.expiryISO ??
+    (() => {
+      const d = new Date(`${input.workedDateISO}T00:00:00Z`);
+      d.setUTCFullYear(d.getUTCFullYear() + 1);
+      return d.toISOString().slice(0, 10);
+    })();
+
+  const form = new URLSearchParams({
+    employee: input.employeeId,
+    date: input.workedDateISO,
+    type: "FULL_DAY",
+    credited: String(input.credited ?? 1),
+    expiry,
+    dateFormat: "yyyy-MM-dd",
+  });
+  if (input.reason) form.set("reason", input.reason);
+
+  const res = await zohoFetch("/people/api/v2/leavetracker/compensatory/records", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`addCompOff failed: ${JSON.stringify(data).slice(0, 300)}`);
+  }
+  return data;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const HOLIDAY_TYPES = [
   { value: "regular", label: "Regular Holiday" },
@@ -8,112 +8,160 @@ const HOLIDAY_TYPES = [
 ];
 
 const ACTIONS = [
-  { value: "take_holiday", label: "Apply / take a holiday off" },
-  { value: "use_credit", label: "Use holiday credit" },
-  { value: "credit_worked", label: "Credit a worked holiday" },
-  { value: "report", label: "Just show my balances" },
+  { value: "take_day_off", label: "Take Day Off" },
+  { value: "report_to_work", label: "Report to Work" },
 ];
 
-type LeaveType = {
-  Name?: string;
-  Id?: string;
-  AvailableCount?: string;
-  BookedCount?: string;
-  [k: string]: unknown;
-};
+const WORK_BENEFITS = [
+  { value: "double_pay", label: "Double Pay" },
+  { value: "earn_credit", label: "Earn Holiday Credit" },
+];
+
+type Employee = { id: string; name: string; email: string };
+type Holiday = { date: string; localName: string; name: string };
 
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
+function thisYear() {
+  return new Date().getFullYear();
+}
 
 export default function FlexiHolidayPage() {
+  // ── sign-in ──
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [signinEmail, setSigninEmail] = useState("");
+  const [signinBusy, setSigninBusy] = useState(false);
+  const [signinErr, setSigninErr] = useState<string | null>(null);
+
+  async function handleSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setSigninErr(null);
+    setSigninBusy(true);
+    try {
+      const res = await fetch(`/api/me?email=${encodeURIComponent(signinEmail)}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Sign-in failed");
+      setEmployee(data.employee);
+    } catch (err) {
+      setSigninErr((err as Error).message);
+    } finally {
+      setSigninBusy(false);
+    }
+  }
+
+  if (!employee) {
+    return (
+      <div className="wrap">
+        <div className="banner">
+          <h1>Flexi Holiday</h1>
+          <p>Sign in with your Byrdson (Zoho) email to file a holiday.</p>
+        </div>
+        <form className="card" onSubmit={handleSignIn}>
+          <label>
+            Zoho Email <span className="req">*</span>
+          </label>
+          <input
+            type="email"
+            required
+            autoFocus
+            placeholder="you@byrdsonservices.com"
+            value={signinEmail}
+            onChange={(e) => setSigninEmail(e.target.value)}
+          />
+          <p className="hint">
+            We&apos;ll verify it against Zoho People and pre-fill your details.
+          </p>
+          <button type="submit" disabled={signinBusy}>
+            {signinBusy ? "Verifying…" : "SIGN IN"}
+          </button>
+          {signinErr && <div className="alert err">{signinErr}</div>}
+        </form>
+      </div>
+    );
+  }
+
+  return <HolidayForm employee={employee} onSignOut={() => setEmployee(null)} />;
+}
+
+function HolidayForm({
+  employee,
+  onSignOut,
+}: {
+  employee: Employee;
+  onSignOut: () => void;
+}) {
   const [holidayType, setHolidayType] = useState("regular");
   const [filing, setFiling] = useState(today());
-  const [action, setAction] = useState("take_holiday");
-  const [holidayName, setHolidayName] = useState("");
-  const [benefit, setBenefit] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [employeeName, setEmployeeName] = useState("");
-  const [email, setEmail] = useState("");
+  const [action, setAction] = useState("take_day_off");
+  const [workBenefit, setWorkBenefit] = useState("double_pay");
+  const [year, setYear] = useState(thisYear());
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [holidayIdx, setHolidayIdx] = useState("");
   const [notes, setNotes] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [balances, setBalances] = useState<LeaveType[] | null>(null);
 
-  const isReport = action === "report";
+  const isReport = action === "report_to_work";
   const isSpecial = holidayType === "special";
-  const holidayNameLabel = isSpecial
-    ? "Non-Working Holiday Name"
-    : "Holiday Name";
 
-  function resetMessages() {
-    setMsg(null);
-    setBalances(null);
-  }
-
-  async function loadBalances() {
-    if (!email) {
-      setMsg({ ok: false, text: "Enter your email to load balances." });
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    setBalances(null);
+  const loadHolidays = useCallback(async (y: number) => {
     try {
-      const res = await fetch(
-        `/api/leave-types?email=${encodeURIComponent(email)}`,
-      );
+      const res = await fetch(`/api/holidays?year=${y}`);
       const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Failed to load balances");
-      setBalances(data.types || []);
-      if (!data.types?.length) {
-        setMsg({ ok: true, text: "No leave types returned for this employee." });
-      }
-    } catch (e) {
-      setMsg({ ok: false, text: (e as Error).message });
-    } finally {
-      setBusy(false);
+      if (data.ok) setHolidays(data.holidays || []);
+      else setHolidays([]);
+    } catch {
+      setHolidays([]);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadHolidays(year);
+    setHolidayIdx("");
+  }, [year, loadHolidays]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
 
-    if (isReport) {
-      await loadBalances();
-      return;
-    }
-
-    if (!email || !from || !to) {
-      setMsg({ ok: false, text: "Email, From and To dates are required." });
+    const holiday = holidays[Number(holidayIdx)];
+    if (!holiday) {
+      setMsg({ ok: false, text: "Please choose a holiday." });
       return;
     }
 
     setBusy(true);
     try {
-      const res = await fetch("/api/leave", {
+      const res = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           holidayType,
+          dateOfFiling: filing,
           action,
-          email,
-          employeeName,
-          holidayName,
-          benefit,
-          from,
-          to,
+          workBenefit: isReport ? workBenefit : "",
+          holidayName: holiday.localName || holiday.name,
+          holidayDate: holiday.date,
+          employeeName: employee.name,
+          employeeEmail: employee.email,
+          employeeId: employee.id,
           notes,
         }),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Submission failed");
-      setMsg({ ok: true, text: "Submitted to Zoho People successfully." });
-    } catch (e) {
-      setMsg({ ok: false, text: (e as Error).message });
+
+      let text = "Submitted — saved to the spreadsheet.";
+      if (data.creditEarned) {
+        text = data.zoho?.ok
+          ? "Submitted — saved to the spreadsheet and holiday credit added to Zoho People."
+          : `Saved to the spreadsheet, but the Zoho credit failed: ${data.zoho?.error}`;
+      }
+      setMsg({ ok: data.creditEarned ? !!data.zoho?.ok : true, text });
+    } catch (err) {
+      setMsg({ ok: false, text: (err as Error).message });
     } finally {
       setBusy(false);
     }
@@ -123,7 +171,19 @@ export default function FlexiHolidayPage() {
     <div className="wrap">
       <div className="banner">
         <h1>Flexi Holiday</h1>
-        <p>Apply holidays and holiday credit — synced directly to Zoho People.</p>
+        <p>
+          Signed in as <strong>{employee.name || employee.email}</strong> ·{" "}
+          <a
+            href="#"
+            style={{ color: "#fff", textDecoration: "underline" }}
+            onClick={(e) => {
+              e.preventDefault();
+              onSignOut();
+            }}
+          >
+            sign out
+          </a>
+        </p>
       </div>
 
       <div className="tabs">
@@ -132,10 +192,7 @@ export default function FlexiHolidayPage() {
             key={t.value}
             type="button"
             className={holidayType === t.value ? "active" : ""}
-            onClick={() => {
-              setHolidayType(t.value);
-              resetMessages();
-            }}
+            onClick={() => setHolidayType(t.value)}
           >
             {t.label}
           </button>
@@ -154,7 +211,7 @@ export default function FlexiHolidayPage() {
         />
 
         <label>
-          Choose your action <span className="req">*</span>
+          Action <span className="req">*</span>
         </label>
         <select value={action} onChange={(e) => setAction(e.target.value)}>
           {ACTIONS.map((a) => (
@@ -164,117 +221,84 @@ export default function FlexiHolidayPage() {
           ))}
         </select>
 
-        {!isReport && (
+        {isReport && (
           <>
-            <label>{holidayNameLabel}</label>
-            <input
-              type="text"
-              placeholder={
-                isSpecial
-                  ? "e.g. EDSA People Power Anniversary"
-                  : "e.g. New Year's Day"
-              }
-              value={holidayName}
-              onChange={(e) => setHolidayName(e.target.value)}
-            />
-
-            {!isSpecial && (
-              <>
-                <label>Benefit</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Regular holiday pay"
-                  value={benefit}
-                  onChange={(e) => setBenefit(e.target.value)}
-                />
-              </>
+            <label>
+              Benefit for reporting to work <span className="req">*</span>
+            </label>
+            <select
+              value={workBenefit}
+              onChange={(e) => setWorkBenefit(e.target.value)}
+            >
+              {WORK_BENEFITS.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            {workBenefit === "earn_credit" && (
+              <p className="hint">
+                A holiday credit will be added to your Zoho People balance.
+              </p>
             )}
-
-            <div className="row">
-              <div>
-                <label>
-                  From <span className="req">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                />
-              </div>
-              <div>
-                <label>
-                  To <span className="req">*</span>
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <label>Employee&apos;s Name</label>
-            <input
-              type="text"
-              value={employeeName}
-              onChange={(e) => setEmployeeName(e.target.value)}
-            />
           </>
         )}
 
-        <label>
-          Email <span className="req">*</span>
-        </label>
-        <input
-          type="email"
-          required
-          placeholder="you@byrdsonservices.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+        <div className="row">
+          <div style={{ flex: "0 0 110px" }}>
+            <label>Year</label>
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+            >
+              {[thisYear() - 1, thisYear(), thisYear() + 1].map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>
+              {isSpecial ? "Non-Working Holiday Name" : "Holiday Name"}{" "}
+              <span className="req">*</span>
+            </label>
+            <select
+              value={holidayIdx}
+              onChange={(e) => setHolidayIdx(e.target.value)}
+              required
+            >
+              <option value="">
+                {holidays.length ? "Select a holiday…" : "Loading holidays…"}
+              </option>
+              {holidays.map((h, i) => (
+                <option key={h.date + i} value={i}>
+                  {h.localName} ({h.date})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <label>Employee&apos;s Name</label>
+        <input type="text" value={employee.name} readOnly />
+
+        <label>Employee Email</label>
+        <input type="email" value={employee.email} readOnly />
+
+        <label>Notes</label>
+        <textarea
+          placeholder="Notes should be added only when Holiday Credit will be used."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
         />
 
-        {!isReport && (
-          <>
-            <label>Notes</label>
-            <textarea
-              placeholder="Notes should be added only when Holiday Credit will be used."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </>
-        )}
-
         <button type="submit" disabled={busy}>
-          {busy ? "Working…" : isReport ? "SHOW BALANCES" : "SEND"}
+          {busy ? "Submitting…" : "SEND"}
         </button>
 
         {msg && (
           <div className={`alert ${msg.ok ? "ok" : "err"}`}>{msg.text}</div>
-        )}
-
-        {balances && balances.length > 0 && (
-          <div className="balances">
-            <table>
-              <thead>
-                <tr>
-                  <th>Leave type</th>
-                  <th>Available</th>
-                  <th>Booked</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balances.map((b, i) => (
-                  <tr key={b.Id || i}>
-                    <td>{b.Name ?? "—"}</td>
-                    <td>{b.AvailableCount ?? "—"}</td>
-                    <td>{b.BookedCount ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </form>
     </div>
