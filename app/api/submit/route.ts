@@ -62,7 +62,10 @@ export async function POST(req: NextRequest) {
   }
 
   const wantsCredit = earnsHolidayCredit(action, workBenefit);
-  const usesCredit = action === ACTIONS.TAKE_DAY_OFF; // taking the day off draws on credit/leave
+  // None of the current actions *use* a flexi-holiday credit:
+  //  - Take Day Off  = not reporting to work (no credit drawn)
+  //  - Report to Work = either Double Pay or Earn Credit (earns, not uses)
+  // So this column is always "No" from this form.
 
   const row: SheetRow = {
     dateOfFiling: body.dateOfFiling || new Date().toISOString().slice(0, 10),
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
     employeeEmail: body.employeeEmail,
     action: ACTION_LABELS[action],
     workBenefit: workBenefit ? WORK_BENEFIT_LABELS[workBenefit as WorkBenefit] : "",
-    useFlexiCredit: usesCredit ? "Yes" : "No",
+    useFlexiCredit: "No",
     fromDate: body.holidayDate,
     toDate: body.holidayDate,
     notes: body.notes || "",
