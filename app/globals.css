@@ -1,11 +1,13 @@
 :root {
-  --bg: #f4f6f9;
+  --bg: #f4f5f7;
   --card: #ffffff;
-  --border: #e2e6ec;
-  --text: #1c2530;
-  --muted: #6b7785;
-  --brand: #0a5cb8;
-  --brand-dark: #084a94;
+  --border: #dde2ea;
+  --text: #0b1f3a;
+  --muted: #6b7280;
+  --brand: #13284b;        /* Byrdson navy */
+  --brand-dark: #0b1f3a;
+  --accent: #e5362b;       /* Byrdson red */
+  --accent-dark: #b4271d;
   --danger: #c0362c;
   --ok: #1f8a4c;
 }
@@ -14,11 +16,87 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  /* Subtle industrial hatch (concrete / steel) */
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(11, 31, 58, 0.035) 0,
+    rgba(11, 31, 58, 0.035) 1px,
+    transparent 1px,
+    transparent 13px
+  );
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
   line-height: 1.45;
+}
+
+/* ── App shell: sticky header, content, footer pinned to bottom ── */
+.site-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.site-main { flex: 1; }
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  border-bottom: 3px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(11, 31, 58, 0.08);
+}
+.site-header-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.site-header-portal { text-align: right; line-height: 1.2; }
+.portal-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+.portal-sub { display: block; font-size: 12px; color: var(--muted); }
+
+.site-footer {
+  background: var(--brand-dark);
+  color: #cdd7e6;
+  border-top: 3px solid var(--accent);
+}
+.site-footer-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 26px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.site-footer-tag {
+  margin: 8px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fb0c8;
+}
+.site-footer-meta { text-align: right; font-size: 13px; }
+.site-footer-meta p { margin: 2px 0; }
+.site-footer-meta .muted { color: #8090a8; font-size: 12px; }
+
+@media (max-width: 560px) {
+  .site-footer-inner { flex-direction: column; align-items: flex-start; }
+  .site-footer-meta { text-align: left; }
+  .site-header-inner { gap: 10px; }
 }
 
 .wrap {
