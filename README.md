@@ -21,12 +21,25 @@ Browser form (app/page.tsx)
             Zoho People (people.zoho.com)
 ```
 
-| Form action | What it does | Zoho call |
+The form has **two views** (tabs), matching the two source forms:
+
+- **Regular Holiday** (`/flexi-holiday`) — paid even if unworked; 200% if worked.
+- **Special Non-Working Holiday** (`/Non-working`) — no-work-no-pay; 130% if worked.
+
+Each view maps its actions to its own set of Zoho leave types:
+
+| View | Form action | Zoho call → env var |
 |---|---|---|
-| Apply / take a holiday off | Inserts a leave record | `insertRecord` → `ZOHO_LEAVETYPE_HOLIDAY` |
-| Use holiday credit | Inserts leave drawn from credit | `insertRecord` → `ZOHO_LEAVETYPE_HOLIDAY_CREDIT` |
-| Credit a worked holiday | Records a worked-holiday accrual | `insertRecord` → `ZOHO_LEAVETYPE_WORKED_HOLIDAY` |
-| Just show my balances | Reads leave types + balances | `getLeaveTypeDetails` |
+| Regular | Apply / take a holiday off | `insertRecord` → `ZOHO_LEAVETYPE_HOLIDAY` |
+| Regular | Use holiday credit | `insertRecord` → `ZOHO_LEAVETYPE_HOLIDAY_CREDIT` |
+| Regular | Credit a worked holiday | `insertRecord` → `ZOHO_LEAVETYPE_WORKED_HOLIDAY` |
+| Special | Apply / take a holiday off | `insertRecord` → `ZOHO_LEAVETYPE_SPECIAL_HOLIDAY` |
+| Special | Use holiday credit | `insertRecord` → `ZOHO_LEAVETYPE_SPECIAL_HOLIDAY_CREDIT` |
+| Special | Credit a worked holiday | `insertRecord` → `ZOHO_LEAVETYPE_SPECIAL_WORKED_HOLIDAY` |
+| either | Just show my balances | `getLeaveTypeDetails` |
+
+The Special view hides the **Benefit** field and relabels "Holiday Name" →
+"Non-Working Holiday Name", matching the source form.
 
 > Note on "credit": Zoho People exposes no clean public "adjust balance"
 > endpoint, so each action maps to a leave record against a dedicated leave
@@ -101,6 +114,6 @@ store — never commit `.env.local`. To replace the current
 - `app/api/leave/route.ts` — POST: apply holiday / credit
 - `app/api/leave-types/route.ts` — GET: balances
 - `lib/zoho.ts` — OAuth token refresh + Zoho API calls
-- `lib/leave-map.ts` — action → leave type mapping
+- `lib/leave-map.ts` — (holiday type + action) → leave type mapping
 - `scripts/get-refresh-token.mjs` — one-time refresh-token bootstrap
 - `scripts/list-leave-types.mjs` — discover leave type IDs

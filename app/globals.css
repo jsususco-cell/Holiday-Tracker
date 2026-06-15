@@ -45,6 +45,28 @@ body {
 .banner h1 { margin: 0 0 4px; font-size: 22px; }
 .banner p { margin: 0; opacity: 0.9; font-size: 14px; }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.tabs button {
+  margin-top: 0;
+  flex: 1;
+  background: #fff;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+.tabs button.active {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.tabs button:hover:not(.active) { background: #f1f5fa; color: var(--text); }
+
 label { display: block; font-weight: 600; font-size: 13px; margin: 16px 0 6px; }
 .req { color: var(--danger); }
 

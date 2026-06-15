@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 
+const HOLIDAY_TYPES = [
+  { value: "regular", label: "Regular Holiday" },
+  { value: "special", label: "Special Non-Working Holiday" },
+];
+
 const ACTIONS = [
   { value: "take_holiday", label: "Apply / take a holiday off" },
   { value: "use_credit", label: "Use holiday credit" },
@@ -22,6 +27,7 @@ function today() {
 }
 
 export default function FlexiHolidayPage() {
+  const [holidayType, setHolidayType] = useState("regular");
   const [filing, setFiling] = useState(today());
   const [action, setAction] = useState("take_holiday");
   const [holidayName, setHolidayName] = useState("");
@@ -37,6 +43,15 @@ export default function FlexiHolidayPage() {
   const [balances, setBalances] = useState<LeaveType[] | null>(null);
 
   const isReport = action === "report";
+  const isSpecial = holidayType === "special";
+  const holidayNameLabel = isSpecial
+    ? "Non-Working Holiday Name"
+    : "Holiday Name";
+
+  function resetMessages() {
+    setMsg(null);
+    setBalances(null);
+  }
 
   async function loadBalances() {
     if (!email) {
@@ -83,6 +98,7 @@ export default function FlexiHolidayPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          holidayType,
           action,
           email,
           employeeName,
@@ -95,10 +111,7 @@ export default function FlexiHolidayPage() {
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Submission failed");
-      setMsg({
-        ok: true,
-        text: "Submitted to Zoho People successfully.",
-      });
+      setMsg({ ok: true, text: "Submitted to Zoho People successfully." });
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
     } finally {
@@ -111,6 +124,22 @@ export default function FlexiHolidayPage() {
       <div className="banner">
         <h1>Flexi Holiday</h1>
         <p>Apply holidays and holiday credit — synced directly to Zoho People.</p>
+      </div>
+
+      <div className="tabs">
+        {HOLIDAY_TYPES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            className={holidayType === t.value ? "active" : ""}
+            onClick={() => {
+              setHolidayType(t.value);
+              resetMessages();
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <form className="card" onSubmit={handleSubmit}>
@@ -137,21 +166,29 @@ export default function FlexiHolidayPage() {
 
         {!isReport && (
           <>
-            <label>Holiday Name</label>
+            <label>{holidayNameLabel}</label>
             <input
               type="text"
-              placeholder="e.g. New Year's Day"
+              placeholder={
+                isSpecial
+                  ? "e.g. EDSA People Power Anniversary"
+                  : "e.g. New Year's Day"
+              }
               value={holidayName}
               onChange={(e) => setHolidayName(e.target.value)}
             />
 
-            <label>Benefit</label>
-            <input
-              type="text"
-              placeholder="e.g. Regular holiday pay"
-              value={benefit}
-              onChange={(e) => setBenefit(e.target.value)}
-            />
+            {!isSpecial && (
+              <>
+                <label>Benefit</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Regular holiday pay"
+                  value={benefit}
+                  onChange={(e) => setBenefit(e.target.value)}
+                />
+              </>
+            )}
 
             <div className="row">
               <div>
@@ -202,7 +239,7 @@ export default function FlexiHolidayPage() {
           <>
             <label>Notes</label>
             <textarea
-              placeholder="Notes should be added only when Holiday Credit will be used or when taking this off."
+              placeholder="Notes should be added only when Holiday Credit will be used."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
