@@ -12,13 +12,15 @@ export function Logo({
 }) {
   const wordColor = variant === "light" ? "#FFFFFF" : "#13284B";
   const subColor = variant === "light" ? "#C7D2E2" : "#1B1B1B";
-  // viewBox 0 0 520 150 → keep aspect ratio
-  const width = (height * 520) / 150;
+  // viewBox sized so the full "BYRDSON" wordmark fits (no clipping).
+  const VB_W = 640;
+  const VB_H = 150;
+  const width = (height * VB_W) / VB_H;
   return (
     <svg
       width={width}
       height={height}
-      viewBox="0 0 520 150"
+      viewBox={`0 0 ${VB_W} ${VB_H}`}
       role="img"
       aria-label="Byrdson Services"
       xmlns="http://www.w3.org/2000/svg"

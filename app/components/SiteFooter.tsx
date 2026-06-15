@@ -12,7 +12,7 @@ export function SiteFooter() {
           </p>
         </div>
         <div className="site-footer-meta">
-          <p>Operations Portal — Work &amp; Benefit Filing</p>
+          <p>Holiday Portal — Work &amp; Benefit Filing</p>
           <p className="muted">
             © {year} Byrdson Services LLC. Internal use only.
           </p>
