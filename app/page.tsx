@@ -18,7 +18,7 @@ const WORK_BENEFITS = [
 ];
 
 type Employee = { id: string; name: string; email: string };
-type Holiday = { date: string; localName: string; name: string };
+type Holiday = { date: string; name: string; type: "regular" | "special" };
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -96,6 +96,7 @@ function HolidayForm({
   const [action, setAction] = useState("take_day_off");
   const [workBenefit, setWorkBenefit] = useState("double_pay");
   const [year, setYear] = useState(thisYear());
+  const [years, setYears] = useState<number[]>([thisYear()]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [holidayIdx, setHolidayIdx] = useState("");
   const [notes, setNotes] = useState("");
@@ -106,21 +107,27 @@ function HolidayForm({
   const isReport = action === "report_to_work";
   const isSpecial = holidayType === "special";
 
-  const loadHolidays = useCallback(async (y: number) => {
+  // Load only the holidays of the selected type (Regular vs Special), per the
+  // active tab — so each tab's dropdown shows just its own holidays.
+  const loadHolidays = useCallback(async (y: number, type: string) => {
     try {
-      const res = await fetch(`/api/holidays?year=${y}`);
+      const res = await fetch(`/api/holidays?year=${y}&type=${type}`);
       const data = await res.json();
-      if (data.ok) setHolidays(data.holidays || []);
-      else setHolidays([]);
+      if (data.ok) {
+        setHolidays(data.holidays || []);
+        if (Array.isArray(data.years) && data.years.length) setYears(data.years);
+      } else {
+        setHolidays([]);
+      }
     } catch {
       setHolidays([]);
     }
   }, []);
 
   useEffect(() => {
-    loadHolidays(year);
+    loadHolidays(year, holidayType);
     setHolidayIdx("");
-  }, [year, loadHolidays]);
+  }, [year, holidayType, loadHolidays]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -142,7 +149,7 @@ function HolidayForm({
           dateOfFiling: filing,
           action,
           workBenefit: isReport ? workBenefit : "",
-          holidayName: holiday.localName || holiday.name,
+          holidayName: holiday.name,
           holidayDate: holiday.date,
           employeeName: employee.name,
           employeeEmail: employee.email,
@@ -251,7 +258,7 @@ function HolidayForm({
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
             >
-              {[thisYear() - 1, thisYear(), thisYear() + 1].map((y) => (
+              {years.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -269,11 +276,13 @@ function HolidayForm({
               required
             >
               <option value="">
-                {holidays.length ? "Select a holiday…" : "Loading holidays…"}
+                {holidays.length
+                  ? "Select a holiday…"
+                  : "No holidays listed for this year"}
               </option>
               {holidays.map((h, i) => (
                 <option key={h.date + i} value={i}>
-                  {h.localName} ({h.date})
+                  {h.name} ({h.date})
                 </option>
               ))}
             </select>

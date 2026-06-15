@@ -1,47 +1,58 @@
 /**
- * Philippine public holidays, fetched from the free Nager.Date API (no key).
- * https://date.nager.at/api/v3/PublicHolidays/{year}/PH
+ * Philippine nationwide holidays, classified per the Official Gazette
+ * (https://www.officialgazette.gov.ph/nationwide-holidays/).
  *
- * Cached in-memory per year for the life of the server process.
+ * The Regular vs Special (Non-Working) split is set yearly by Presidential
+ * proclamation and is PH-specific, so it's curated here rather than pulled from
+ * a generic holiday API. UPDATE THIS LIST each year when the new proclamation
+ * is published (and add the year to AVAILABLE_YEARS in the form).
+ *
+ * "Special (Working)" days (e.g. EDSA Anniversary) are intentionally omitted —
+ * they are neither a Regular nor a Special Non-Working holiday for this form.
  */
+
+export type HolidayType = "regular" | "special";
 
 export type Holiday = {
   date: string; // YYYY-MM-DD
-  localName: string;
   name: string;
-  /** Nager "types" — e.g. ["Public"]. We surface it for classification hints. */
-  types?: string[];
+  type: HolidayType;
 };
 
-const cache = new Map<number, { at: number; data: Holiday[] }>();
-const TTL_MS = 12 * 60 * 60 * 1000; // 12h
+const PH_HOLIDAYS: Record<number, Holiday[]> = {
+  2026: [
+    // ── Regular Holidays ──
+    { date: "2026-01-01", name: "New Year's Day", type: "regular" },
+    { date: "2026-04-02", name: "Maundy Thursday", type: "regular" },
+    { date: "2026-04-03", name: "Good Friday", type: "regular" },
+    { date: "2026-04-09", name: "Araw ng Kagitingan (Day of Valor)", type: "regular" },
+    { date: "2026-05-01", name: "Labor Day", type: "regular" },
+    { date: "2026-06-12", name: "Independence Day", type: "regular" },
+    { date: "2026-08-31", name: "National Heroes Day", type: "regular" },
+    { date: "2026-11-30", name: "Bonifacio Day", type: "regular" },
+    { date: "2026-12-25", name: "Christmas Day", type: "regular" },
+    { date: "2026-12-30", name: "Rizal Day", type: "regular" },
+    // ── Special (Non-Working) Days ──
+    { date: "2026-02-17", name: "Chinese New Year", type: "special" },
+    { date: "2026-04-04", name: "Black Saturday", type: "special" },
+    { date: "2026-08-21", name: "Ninoy Aquino Day", type: "special" },
+    { date: "2026-11-01", name: "All Saints' Day", type: "special" },
+    { date: "2026-11-02", name: "All Souls' Day", type: "special" },
+    { date: "2026-12-08", name: "Feast of the Immaculate Conception of Mary", type: "special" },
+    { date: "2026-12-24", name: "Christmas Eve", type: "special" },
+    { date: "2026-12-31", name: "Last Day of the Year", type: "special" },
+  ],
+};
 
-export async function getPHHolidays(year: number): Promise<Holiday[]> {
-  const hit = cache.get(year);
-  // Note: Date.now() is fine here — this is the server runtime, not a workflow.
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.data;
+export function availableYears(): number[] {
+  return Object.keys(PH_HOLIDAYS)
+    .map(Number)
+    .sort((a, b) => a - b);
+}
 
-  const res = await fetch(
-    `https://date.nager.at/api/v3/PublicHolidays/${year}/PH`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) {
-    throw new Error(`Holiday API returned ${res.status}`);
-  }
-  const raw = (await res.json()) as Array<{
-    date: string;
-    localName: string;
-    name: string;
-    types?: string[];
-  }>;
-
-  const data: Holiday[] = raw.map((h) => ({
-    date: h.date,
-    localName: h.localName,
-    name: h.name,
-    types: h.types,
-  }));
-
-  cache.set(year, { at: Date.now(), data });
-  return data;
+/** Holidays for a year, optionally filtered to one type (regular | special). */
+export function getPHHolidays(year: number, type?: HolidayType): Holiday[] {
+  const list = PH_HOLIDAYS[year] ?? [];
+  const filtered = type ? list.filter((h) => h.type === type) : list;
+  return [...filtered].sort((a, b) => a.date.localeCompare(b.date));
 }
