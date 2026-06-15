@@ -296,35 +296,54 @@ export type CompOffInput = {
 
 /**
  * Add a Compensatory-Off credit ("Earn Holiday Credit").
- * POST /people/api/v2/leavetracker/compensatory/records  (scope leave.CREATE)
+ *
+ * Uses the **v3** API: POST /people/api/v3/leave-tracker/compensatory
+ * (scope ZohoPeople.leave.CREATE). The v2 endpoint silently no-ops on this
+ * account, so v3 is required. Dates MUST be in the org default `dd-MMM-yyyy`
+ * format; other formats return an INVALID_INPUT error.
+ *
+ * Returns { compensatory_id } on success.
  */
-export async function addCompOff(input: CompOffInput): Promise<unknown> {
-  const expiry =
+export async function addCompOff(
+  input: CompOffInput,
+): Promise<{ compensatory_id?: string; message?: string }> {
+  const workedDate = toZohoDate(input.workedDateISO); // dd-MMM-yyyy
+  const expiryDate = toZohoDate(
     input.expiryISO ??
-    (() => {
-      const d = new Date(`${input.workedDateISO}T00:00:00Z`);
-      d.setUTCFullYear(d.getUTCFullYear() + 1);
-      return d.toISOString().slice(0, 10);
-    })();
+      (() => {
+        const d = new Date(`${input.workedDateISO}T00:00:00Z`);
+        d.setUTCFullYear(d.getUTCFullYear() + 1);
+        return d.toISOString().slice(0, 10);
+      })(),
+  );
 
   const form = new URLSearchParams({
-    employee: input.employeeId,
-    date: input.workedDateISO,
-    type: "FULL_DAY",
-    credited: String(input.credited ?? 1),
-    expiry,
-    dateFormat: "yyyy-MM-dd",
+    employee_zoho_id: input.employeeId,
+    worked_date: workedDate,
+    unit: "Days",
+    duration: "FULL_DAY",
+    expiry_date: expiryDate,
   });
   if (input.reason) form.set("reason", input.reason);
 
-  const res = await zohoFetch("/people/api/v2/leavetracker/compensatory/records", {
+  const res = await zohoFetch("/people/api/v3/leave-tracker/compensatory", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form.toString(),
   });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(`addCompOff failed: ${JSON.stringify(data).slice(0, 300)}`);
+
+  const text = await res.text();
+  let data: { data?: { compensatory_id?: string }; message?: string; status?: string; code?: string } = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    /* non-JSON body */
   }
-  return data;
+
+  if (!res.ok || data.status === "error") {
+    throw new Error(
+      `addCompOff failed (${res.status}): ${data.message || data.code || text.slice(0, 200) || "empty response"}`,
+    );
+  }
+  return { compensatory_id: data.data?.compensatory_id, message: data.message };
 }

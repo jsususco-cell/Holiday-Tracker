@@ -32,7 +32,7 @@ People's **Compensatory-Off** semantics:
 
 | Sheet column | Driven by | Zoho |
 |---|---|---|
-| Accumulated Flexi-Holiday Credits | Report to Work → Earn Holiday Credit | Comp-Off **credit** (`POST .../compensatory/records`) |
+| Accumulated Flexi-Holiday Credits | Report to Work → Earn Holiday Credit | Comp-Off **credit** (`POST /api/v3/leave-tracker/compensatory`) |
 | Used Flexi-holiday credit | Take Day Off (drawing on a credit) | Comp-Off **availed** (logged to sheet; see note) |
 | Balance | accumulated − used | Comp-Off balance |
 
@@ -68,6 +68,9 @@ Google Sheet (Apps Script)            Zoho People (people.zoho.com)
    ```
    Paste the printed `ZOHO_REFRESH_TOKEN=...` into `.env.local`.
 4. Make sure **Compensatory Off** is enabled in Zoho People (Leave settings).
+   Note: the integration uses the **v3** comp-off API with `dd-MMM-yyyy` dates
+   (the v2 endpoint silently no-ops on this account). Adding the same worked
+   date twice for an employee returns "Date is already added" — expected.
 
 ### B. Google Sheet receiver
 
