@@ -145,9 +145,17 @@ function listPending_() {
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
     if (String(r[7]) === "PENDING") {
+      var wd = r[1];
+      if (wd instanceof Date) {
+        wd = Utilities.formatDate(
+          wd,
+          SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(),
+          "yyyy-MM-dd",
+        );
+      }
       out.push({
         key: String(r[0]),
-        workedDate: String(r[1]),
+        workedDate: String(wd),
         employeeId: String(r[2]),
         employeeEmail: String(r[3]),
         employeeName: String(r[4]),

@@ -100,6 +100,26 @@ export async function registerPendingCredit(p: PendingCredit): Promise<void> {
   await postWebhook({ kind: "pending", pending: p });
 }
 
+/**
+ * Normalize a worked-date value to YYYY-MM-DD. Google Sheets may return a date
+ * cell as a locale Date string (e.g. "Fri Jun 12 2026 00:00:00 GMT+0800 …");
+ * parse the calendar date directly to avoid timezone off-by-one.
+ */
+function toISODate(v: unknown): string {
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const months: Record<string, string> = {
+    Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+    Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+  };
+  const m = s.match(/\b([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\b/); // "Jun 12 2026"
+  if (m && months[m[1]]) {
+    return `${m[3]}-${months[m[1]]}-${m[2].padStart(2, "0")}`;
+  }
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
+}
+
 /** List all PENDING credit rows from the sheet. */
 export async function listPendingCredits(): Promise<PendingCredit[]> {
   const url = new URL(webhookUrl());
@@ -116,7 +136,10 @@ export async function listPendingCredits(): Promise<PendingCredit[]> {
   if (!res.ok || parsed.ok === false) {
     throw new Error(`List pending failed (${res.status}): ${parsed.error || text.slice(0, 200)}`);
   }
-  return parsed.rows || [];
+  return (parsed.rows || []).map((r) => ({
+    ...r,
+    workedDate: toISODate(r.workedDate),
+  }));
 }
 
 /** Mark a pending credit row (CREDITED / NO_CREDIT / …) with a note. */
