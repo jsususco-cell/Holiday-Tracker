@@ -1,24 +1,37 @@
 /**
  * Byrdson Flexi-Holiday — Google Sheet receiver.
  *
- * Deploy this as a Web App bound to your Holiday Tracker spreadsheet:
- *   1. Open the sheet → Extensions → Apps Script.
- *   2. Paste this file's contents into Code.gs (replace anything there).
- *   3. (Optional) set a shared secret: Project Settings → Script Properties →
- *      add  WEBHOOK_SECRET = <some-random-string>  and put the same value in
- *      the app's GOOGLE_SHEET_WEBHOOK_SECRET env var.
- *   4. Deploy → New deployment → type "Web app".
- *        Execute as: Me
- *        Who has access: Anyone   (the secret protects it)
- *   5. Copy the Web App URL → app env var GOOGLE_SHEET_WEBHOOK_URL.
+ * Deploy as a Web App bound to your Holiday Tracker spreadsheet:
+ *   1. Sheet → Extensions → Apps Script → paste this into Code.gs.
+ *   2. (Optional) Project Settings → Script Properties → WEBHOOK_SECRET=<random>,
+ *      and set the same value in the app's GOOGLE_SHEET_WEBHOOK_SECRET.
+ *   3. Deploy → New deployment → Web app → Execute as: Me, Access: Anyone.
+ *   4. Copy the Web App URL → app env var GOOGLE_SHEET_WEBHOOK_URL.
  *
- * It appends one row to the responses sheet. Your Summary sheet's formulas
- * (Accumulated / Used / Balance) roll up automatically from these rows.
+ * IMPORTANT: after editing this script you must redeploy a NEW VERSION
+ * (Deploy → Manage deployments → Edit → Version: New version) for changes to
+ * take effect.
+ *
+ * Routing: Regular Holiday submissions go to the "RegularRawData" tab, Special
+ * Non-Working submissions go to "SpecialRawData". Missing tabs are created with
+ * headers automatically.
  */
 
-// Name of the tab that holds form responses (the one with the headers
-// "Date of Filing", "Holiday Name", ... "Approved?"). Change if different.
-var RESPONSES_SHEET_NAME = "Form Responses";
+var REGULAR_SHEET_NAME = "RegularRawData";
+var SPECIAL_SHEET_NAME = "SpecialRawData";
+
+var HEADERS = [
+  "Date of Filing",
+  "Holiday Name",
+  "Employee Name",
+  "Choose your Action",
+  "Use Flexi-Holiday Credit",
+  "Benefit",
+  "From Date (Original Holiday)",
+  "To Date",
+  "Notes",
+  "Approved?",
+];
 
 function doPost(e) {
   try {
@@ -30,13 +43,19 @@ function doPost(e) {
     }
 
     var row = body.row || {};
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(RESPONSES_SHEET_NAME) || ss.getSheets()[0];
 
-    // Column order matches the existing tracker headers:
-    // Date of Filing | Holiday Name | Employee Name | Choose your Action |
-    // Use Flexi-Holiday Credit | Benefit | From Date (Original Holiday) |
-    // To Date | Notes | Approved?
+    // Route by holiday type. The app sends holidayType as "Regular Holiday" or
+    // "Special Non-Working Holiday".
+    var isSpecial = String(row.holidayType || "").toLowerCase().indexOf("special") !== -1;
+    var sheetName = isSpecial ? SPECIAL_SHEET_NAME : REGULAR_SHEET_NAME;
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      sheet.appendRow(HEADERS);
+    }
+
     sheet.appendRow([
       row.dateOfFiling || "",
       row.holidayName || "",
@@ -47,10 +66,10 @@ function doPost(e) {
       row.fromDate || "",
       row.toDate || "",
       row.notes || "",
-      "", // Approved? — left blank for HR to fill
+      "", // Approved? — left blank for HR
     ]);
 
-    return json_({ ok: true });
+    return json_({ ok: true, sheet: sheetName });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }

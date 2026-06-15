@@ -16,13 +16,21 @@ to your [Holiday Tracker sheet](https://docs.google.com/spreadsheets/d/10ShAanTg
    Anyone*. Authorize when prompted.
 6. Copy the **Web app URL** into the app's `GOOGLE_SHEET_WEBHOOK_URL`.
 
+## Routing
+
+Submissions are split by holiday type:
+
+- **Regular Holiday** → `RegularRawData` tab
+- **Special Non-Working Holiday** → `SpecialRawData` tab
+
+If a tab is missing it's created automatically with the standard headers.
+
 ## Notes
 
 - Because it runs **as you**, it can write to the sheet without a service
   account or shared key file. The optional secret stops random callers.
 - The **Summary** sheet (Accumulated / Used / Balance) is expected to compute
-  from the response rows via formulas — this script only appends rows. If your
-  Summary is *not* formula-driven, tell the developer and we'll have the script
-  update it directly.
-- To change what's deployed later, edit the script and **Deploy → Manage
-  deployments → Edit → New version**.
+  from these rows via formulas — this script only appends rows.
+- **After editing this script you MUST redeploy a new version**
+  (Deploy → Manage deployments → Edit → Version: *New version* → Deploy).
+  The Web App URL stays the same, so no env change is needed.
