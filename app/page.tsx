@@ -148,7 +148,7 @@ function HolidayForm({
           holidayType,
           dateOfFiling: filing,
           action,
-          workBenefit: isReport ? workBenefit : "",
+          workBenefit: isReport && !isSpecial ? workBenefit : "",
           holidayName: holiday.name,
           holidayDate: holiday.date,
           employeeName: employee.name,
@@ -228,7 +228,10 @@ function HolidayForm({
           ))}
         </select>
 
-        {isReport && (
+        {/* Benefit choice (Double Pay / Earn Credit) only applies to Regular
+            holidays. Special Non-Working holidays keep the actions but have no
+            benefit sub-choice. */}
+        {isReport && !isSpecial && (
           <>
             <label>
               Benefit for reporting to work <span className="req">*</span>

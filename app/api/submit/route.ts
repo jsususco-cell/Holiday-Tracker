@@ -10,6 +10,7 @@ import {
   isHolidayType,
   isWorkBenefit,
   ACTIONS,
+  HOLIDAY_TYPES,
   type Action,
   type HolidayType,
   type WorkBenefit,
@@ -48,7 +49,14 @@ export async function POST(req: NextRequest) {
   if (!isAction(action)) {
     return NextResponse.json({ ok: false, error: "Choose an action." }, { status: 400 });
   }
-  if (action === ACTIONS.REPORT_TO_WORK && !isWorkBenefit(workBenefit)) {
+  // The Double Pay / Earn Holiday Credit choice applies to Regular holidays
+  // only. Special Non-Working holidays keep the actions but have no benefit
+  // sub-choice (and never earn a credit).
+  if (
+    holidayType === HOLIDAY_TYPES.REGULAR &&
+    action === ACTIONS.REPORT_TO_WORK &&
+    !isWorkBenefit(workBenefit)
+  ) {
     return NextResponse.json(
       { ok: false, error: "Choose Double Pay or Earn Holiday Credit." },
       { status: 400 },
