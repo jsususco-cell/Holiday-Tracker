@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const HOLIDAY_TYPES = [
   { value: "regular", label: "Regular Holiday" },
@@ -108,6 +108,11 @@ function HolidayForm({
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Banner | null>(null);
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (redirectTimer.current) clearTimeout(redirectTimer.current);
+  }, []);
 
   const isReport = action === "report_to_work";
   const isSpecial = holidayType === "special";
@@ -165,11 +170,15 @@ function HolidayForm({
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Submission failed");
 
-      // Open the Flexi Holiday Google Sheet in a new tab (manual link below is
-      // the fallback if the browser blocks the pop-up).
-      window.open(SHEET_URL, "_blank", "noopener,noreferrer");
+      // Show the banner now, then open the Flexi Holiday Google Sheet in a new
+      // tab after a 5s delay (the manual link below is the fallback if the
+      // browser blocks the delayed pop-up).
+      if (redirectTimer.current) clearTimeout(redirectTimer.current);
+      redirectTimer.current = setTimeout(() => {
+        window.open(SHEET_URL, "_blank", "noopener,noreferrer");
+      }, 5000);
 
-      const text = `Filing submitted — ${employee.name || employee.email} · ${holiday.name} · Redirecting to Flexi Holiday Google Sheet →`;
+      const text = `Filing submitted — ${employee.name || employee.email} · ${holiday.name} · Redirecting to Flexi Holiday Google Sheet in 5s →`;
       let note: string | undefined;
       if (data.creditEarned) {
         note = data.pending?.ok
@@ -185,6 +194,7 @@ function HolidayForm({
   }
 
   function resetForm() {
+    if (redirectTimer.current) clearTimeout(redirectTimer.current);
     setHolidayType("regular");
     setFiling(today());
     setAction("take_day_off");
