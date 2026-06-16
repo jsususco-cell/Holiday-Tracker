@@ -75,7 +75,25 @@ function doGet(e) {
   var params = (e && e.parameter) || {};
   if (!checkSecret_(params.secret)) return json_({ ok: false, error: "Unauthorized" });
   if (params.action === "pending") return json_({ ok: true, rows: listPending_() });
+  if (params.action === "clear") return clearAll_(params);
   return json_({ ok: true, message: "Flexi-Holiday webhook is live." });
+}
+
+/* ── danger: wipe all data tabs (they recreate with headers on next write) ── */
+function clearAll_(params) {
+  if (String(params.confirm || "") !== "CLEAR") {
+    return json_({ ok: false, error: "Add confirm=CLEAR to wipe the data tabs." });
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var cleared = [];
+  [REGULAR_SHEET_NAME, SPECIAL_SHEET_NAME, PENDING_SHEET_NAME].forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (sh) {
+      ss.deleteSheet(sh);
+      cleared.push(name);
+    }
+  });
+  return json_({ ok: true, cleared: cleared });
 }
 
 /* ── submission log ── */
