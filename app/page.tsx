@@ -86,7 +86,16 @@ export default function FlexiHolidayPage() {
     );
   }
 
-  return <HolidayForm employee={employee} onSignOut={() => setEmployee(null)} />;
+  return (
+    <HolidayForm
+      employee={employee}
+      onSignOut={() => {
+        setEmployee(null);
+        setSigninEmail("");
+        setSigninErr(null);
+      }}
+    />
+  );
 }
 
 function HolidayForm({
@@ -193,16 +202,10 @@ function HolidayForm({
     }
   }
 
-  function resetForm() {
+  // Cancel returns to the first step (Zoho email verification / sign-in).
+  function handleCancel() {
     if (redirectTimer.current) clearTimeout(redirectTimer.current);
-    setHolidayType("regular");
-    setFiling(today());
-    setAction("take_day_off");
-    setWorkBenefit("double_pay");
-    setYear(thisYear());
-    setHolidayIdx("");
-    setNotes("");
-    setMsg(null);
+    onSignOut();
   }
 
   return (
@@ -337,7 +340,7 @@ function HolidayForm({
         />
 
         <div className="form-footer">
-          <button type="button" className="btn-cancel" onClick={resetForm}>
+          <button type="button" className="btn-cancel" onClick={handleCancel}>
             Cancel
           </button>
           <button type="submit" disabled={busy}>
