@@ -178,6 +178,35 @@ button {
 button:hover { background: var(--brand-dark); }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 24px;
+}
+.form-footer button { margin-top: 0; }
+.btn-cancel {
+  background: transparent;
+  color: var(--brand-dark);
+  border: none;
+  font-weight: 600;
+  padding: 12px 8px;
+}
+.btn-cancel:hover { background: transparent; text-decoration: underline; }
+
+.redirect-banner {
+  margin-top: 18px;
+  border-left: 4px solid var(--brand-dark);
+  background: #eef2f7;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text);
+}
+.redirect-note { color: var(--muted); margin-top: 4px; }
+.redirect-link { margin-top: 6px; }
+.redirect-link a { color: var(--brand); font-weight: 600; }
+
 .alert { padding: 12px 14px; border-radius: 8px; margin-top: 18px; font-size: 14px; }
 .alert.ok { background: #e6f4ec; color: var(--ok); border: 1px solid #b8e0c8; }
 .alert.err { background: #fbeae8; color: var(--danger); border: 1px solid #f0c5c0; }

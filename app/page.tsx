@@ -17,6 +17,11 @@ const WORK_BENEFITS = [
   { value: "earn_credit", label: "Earn Holiday Credit" },
 ];
 
+const SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/10ShAanTgN8VFYrotEiJTJQlBJwsXjrRWX1oo7SQEPtg/edit?gid=1456496038#gid=1456496038";
+
+type Banner = { ok: boolean; text: string; redirect?: boolean; note?: string };
+
 type Employee = { id: string; name: string; email: string };
 type Holiday = { date: string; name: string; type: "regular" | "special" };
 
@@ -102,7 +107,7 @@ function HolidayForm({
   const [notes, setNotes] = useState("");
 
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<Banner | null>(null);
 
   const isReport = action === "report_to_work";
   const isSpecial = holidayType === "special";
@@ -160,18 +165,34 @@ function HolidayForm({
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Submission failed");
 
-      let text = "Submitted — saved to the spreadsheet.";
+      // Open the Flexi Holiday Google Sheet in a new tab (manual link below is
+      // the fallback if the browser blocks the pop-up).
+      window.open(SHEET_URL, "_blank", "noopener,noreferrer");
+
+      const text = `Filing submitted — ${employee.name || employee.email} · ${holiday.name} · Redirecting to Flexi Holiday Google Sheet →`;
+      let note: string | undefined;
       if (data.creditEarned) {
-        text = data.pending?.ok
-          ? "Submitted. Your holiday credit is recorded and will post to Zoho People after the holiday, once your attendance for that day is 8 hours or more."
-          : `Saved to the spreadsheet, but registering the pending credit failed: ${data.pending?.error}`;
+        note = data.pending?.ok
+          ? "Your holiday credit will post to Zoho People after the holiday, once your attendance that day is 8 hours or more."
+          : `Note: registering the pending credit failed — ${data.pending?.error}`;
       }
-      setMsg({ ok: data.creditEarned ? !!data.pending?.ok : true, text });
+      setMsg({ ok: true, text, redirect: true, note });
     } catch (err) {
       setMsg({ ok: false, text: (err as Error).message });
     } finally {
       setBusy(false);
     }
+  }
+
+  function resetForm() {
+    setHolidayType("regular");
+    setFiling(today());
+    setAction("take_day_off");
+    setWorkBenefit("double_pay");
+    setYear(thisYear());
+    setHolidayIdx("");
+    setNotes("");
+    setMsg(null);
   }
 
   return (
@@ -305,11 +326,27 @@ function HolidayForm({
           onChange={(e) => setNotes(e.target.value)}
         />
 
-        <button type="submit" disabled={busy}>
-          {busy ? "Submitting…" : "SEND"}
-        </button>
+        <div className="form-footer">
+          <button type="button" className="btn-cancel" onClick={resetForm}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy}>
+            {busy ? "Submitting…" : "SEND"}
+          </button>
+        </div>
 
-        {msg && (
+        {msg && msg.redirect && (
+          <div className="redirect-banner">
+            <div>{msg.text}</div>
+            {msg.note && <div className="redirect-note">{msg.note}</div>}
+            <div className="redirect-link">
+              <a href={SHEET_URL} target="_blank" rel="noopener noreferrer">
+                Open sheet manually
+              </a>
+            </div>
+          </div>
+        )}
+        {msg && !msg.redirect && (
           <div className={`alert ${msg.ok ? "ok" : "err"}`}>{msg.text}</div>
         )}
       </form>
