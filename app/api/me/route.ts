@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveEmployee } from "@/lib/zoho";
+import { checkAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,8 @@ export async function GET(req: NextRequest) {
         { status: 404 },
       );
     }
-    return NextResponse.json({ ok: true, employee });
+    const isAdmin = checkAdmin(employee.email).ok;
+    return NextResponse.json({ ok: true, employee: { ...employee, isAdmin } });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: (err as Error).message },

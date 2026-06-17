@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Pending = {
   key: string;
@@ -21,13 +21,24 @@ export default function AdminPage() {
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function loadPending(e?: React.FormEvent) {
+  // Auto-load when arriving from the form's admin button (/admin?email=…).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("email");
+    if (q) {
+      setEmail(q);
+      loadPending(undefined, q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadPending(e?: React.FormEvent, overrideEmail?: string) {
     e?.preventDefault();
+    const useEmail = overrideEmail ?? email;
     setErr(null);
     setMsg(null);
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/pending?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/api/admin/pending?email=${encodeURIComponent(useEmail)}`);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Failed");
       setRows(data.rows || []);

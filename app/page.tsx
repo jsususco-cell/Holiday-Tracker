@@ -22,7 +22,7 @@ const SHEET_URL =
 
 type Banner = { ok: boolean; text: string; redirect?: boolean; note?: string };
 
-type Employee = { id: string; name: string; email: string };
+type Employee = { id: string; name: string; email: string; isAdmin?: boolean };
 type Holiday = { date: string; name: string; type: "regular" | "special" };
 
 function today() {
@@ -224,6 +224,17 @@ function HolidayForm({
           >
             sign out
           </a>
+          {employee.isAdmin && (
+            <>
+              {" · "}
+              <a
+                href={`/admin?email=${encodeURIComponent(employee.email)}`}
+                style={{ color: "#fff", textDecoration: "underline" }}
+              >
+                Admin: Pending Credits
+              </a>
+            </>
+          )}
         </p>
       </div>
 
