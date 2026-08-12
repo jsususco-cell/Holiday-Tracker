@@ -75,8 +75,86 @@ function doGet(e) {
   var params = (e && e.parameter) || {};
   if (!checkSecret_(params.secret)) return json_({ ok: false, error: "Unauthorized" });
   if (params.action === "pending") return json_({ ok: true, rows: listPending_() });
+  if (params.action === "submissions") return json_({ ok: true, rows: listSubmissions_() });
   if (params.action === "clear") return clearAll_(params);
   return json_({ ok: true, message: "Flexi-Holiday webhook is live." });
+}
+
+/* ── all submissions (for the admin view) ── */
+function listSubmissions_() {
+  var out = [];
+  out = out.concat(readTab_(REGULAR_SHEET_NAME, false));
+  out = out.concat(readTab_(SPECIAL_SHEET_NAME, true));
+
+  // Best-effort credit status: match earn-credit rows to the PendingCredits
+  // queue on employee name + worked date.
+  var status = {};
+  var ps = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PENDING_SHEET_NAME);
+  if (ps && ps.getLastRow() > 1) {
+    var pd = ps.getRange(2, 1, ps.getLastRow() - 1, PENDING_HEADERS.length).getValues();
+    for (var i = 0; i < pd.length; i++) {
+      status[String(pd[i][4]).trim() + "|" + fmtDate_(pd[i][1])] = String(pd[i][7] || "");
+    }
+  }
+  for (var j = 0; j < out.length; j++) {
+    if (out[j].category === "earn_credit") {
+      out[j].creditStatus = status[out[j].employeeName.trim() + "|" + out[j].fromDate] || "PENDING";
+    }
+  }
+
+  // newest first
+  out.sort(function (a, b) { return String(b.dateOfFiling).localeCompare(String(a.dateOfFiling)); });
+  return out;
+}
+
+function readTab_(name, isSpecial) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var width = isSpecial ? SPECIAL_HEADERS.length : REGULAR_HEADERS.length;
+  var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, width).getValues();
+  var rows = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (!r[0] && !r[2]) continue; // blank row
+
+    var action = String(r[3] || "");
+    var benefit = isSpecial ? "" : String(r[5] || "");
+
+    var category = "take_day_off";
+    if (action.toLowerCase().indexOf("report") !== -1) {
+      if (benefit.toLowerCase().indexOf("credit") !== -1) category = "earn_credit";
+      else if (benefit.toLowerCase().indexOf("double") !== -1) category = "double_pay";
+      else category = "report_to_work"; // Special tab has no benefit column
+    }
+
+    rows.push({
+      holidayType: isSpecial ? "Special Non-Working Holiday" : "Regular Holiday",
+      dateOfFiling: fmtDate_(r[0]),
+      holidayName: String(r[1] || ""),
+      employeeName: String(r[2] || ""),
+      action: action,
+      useFlexiCredit: isSpecial ? "" : String(r[4] || ""),
+      benefit: benefit,
+      fromDate: fmtDate_(isSpecial ? r[4] : r[6]),
+      toDate: fmtDate_(isSpecial ? r[5] : r[7]),
+      notes: String(isSpecial ? r[6] : r[8] || ""),
+      approved: isSpecial ? "" : String(r[9] || ""),
+      category: category,
+    });
+  }
+  return rows;
+}
+
+function fmtDate_(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(
+      v,
+      SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(),
+      "yyyy-MM-dd",
+    );
+  }
+  return String(v || "");
 }
 
 /* ── danger: wipe all data tabs (they recreate with headers on next write) ── */

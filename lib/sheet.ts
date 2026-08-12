@@ -142,6 +142,50 @@ export async function listPendingCredits(): Promise<PendingCredit[]> {
   }));
 }
 
+export type Submission = {
+  holidayType: string;
+  dateOfFiling: string;
+  holidayName: string;
+  employeeName: string;
+  action: string;
+  useFlexiCredit: string;
+  benefit: string;
+  fromDate: string;
+  toDate: string;
+  notes: string;
+  approved: string;
+  /** earn_credit | double_pay | take_day_off | report_to_work */
+  category: string;
+  /** only for earn_credit: PENDING | CREDITED | … */
+  creditStatus?: string;
+};
+
+/** Read every submission row (both tabs) for the admin view. */
+export async function listSubmissions(): Promise<Submission[]> {
+  const url = new URL(webhookUrl());
+  url.searchParams.set("action", "submissions");
+  url.searchParams.set("secret", SECRET());
+  const res = await fetch(url.toString(), { cache: "no-store", redirect: "follow" });
+  const text = await res.text();
+  let parsed: { ok?: boolean; rows?: Submission[]; error?: string } = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(
+      "Sheet returned a non-JSON response — the Apps Script web app may need redeploying (Deploy → Manage deployments → new version) or its access set to 'Anyone'.",
+    );
+  }
+  if (!res.ok || parsed.ok === false) {
+    throw new Error(`List submissions failed (${res.status}): ${parsed.error || text.slice(0, 200)}`);
+  }
+  return (parsed.rows || []).map((r) => ({
+    ...r,
+    dateOfFiling: toISODate(r.dateOfFiling),
+    fromDate: toISODate(r.fromDate),
+    toDate: toISODate(r.toDate),
+  }));
+}
+
 /** Mark a pending credit row (CREDITED / NO_CREDIT / …) with a note. */
 export async function markPendingCredit(
   key: string,

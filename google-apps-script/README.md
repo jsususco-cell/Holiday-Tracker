@@ -43,6 +43,16 @@ serves this queue to the app:
 The app's daily reconcile job reads this queue, checks attendance, posts the
 credit, and marks the row.
 
+## Endpoints
+
+| Call | Purpose |
+|---|---|
+| `POST` (kind omitted) | append a submission row |
+| `POST` `kind=pending` / `kind=mark` | pending-credit queue |
+| `GET ?action=pending` | list PENDING credits |
+| `GET ?action=submissions` | **all filings from both tabs, categorised** (powers the admin view) |
+| `GET ?action=clear&confirm=CLEAR` | wipe the data tabs |
+
 ## Notes
 
 - Because it runs **as you**, it can write to the sheet without a service

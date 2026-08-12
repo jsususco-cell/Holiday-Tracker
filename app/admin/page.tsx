@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type Pending = {
   key: string;
@@ -12,44 +12,81 @@ type Pending = {
   passed: boolean;
 };
 
+type Submission = {
+  holidayType: string;
+  dateOfFiling: string;
+  holidayName: string;
+  employeeName: string;
+  action: string;
+  benefit: string;
+  fromDate: string;
+  toDate: string;
+  notes: string;
+  approved: string;
+  category: string;
+  creditStatus?: string;
+};
+
+type Counts = Record<string, number>;
+
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "earn_credit", label: "Earn Credit" },
+  { key: "double_pay", label: "Double Pay" },
+  { key: "take_day_off", label: "Take Day Off" },
+];
+
+const CATEGORY_LABEL: Record<string, string> = {
+  earn_credit: "Earn Credit",
+  double_pay: "Double Pay",
+  take_day_off: "Take Day Off",
+  report_to_work: "Report to Work",
+};
+
 export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [authed, setAuthed] = useState(false);
-  const [rows, setRows] = useState<Pending[]>([]);
+  const [tab, setTab] = useState<"submissions" | "pending">("submissions");
+
+  const [rows, setRows] = useState<Submission[]>([]);
+  const [counts, setCounts] = useState<Counts>({});
+  const [filter, setFilter] = useState("all");
+
+  const [pending, setPending] = useState<Pending[]>([]);
   const [busy, setBusy] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Auto-load when arriving from the form's admin button (/admin?email=…).
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("email");
-    if (q) {
-      setEmail(q);
-      loadPending(undefined, q);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadPending(e?: React.FormEvent, overrideEmail?: string) {
-    e?.preventDefault();
-    const useEmail = overrideEmail ?? email;
+  const load = useCallback(async (who: string) => {
     setErr(null);
     setMsg(null);
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/pending?email=${encodeURIComponent(useEmail)}`);
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || "Failed");
-      setRows(data.rows || []);
+      const [s, p] = await Promise.all([
+        fetch(`/api/admin/submissions?email=${encodeURIComponent(who)}`).then((r) => r.json()),
+        fetch(`/api/admin/pending?email=${encodeURIComponent(who)}`).then((r) => r.json()),
+      ]);
+      if (!s.ok) throw new Error(s.error || "Failed to load submissions");
+      setRows(s.rows || []);
+      setCounts(s.counts || {});
+      if (p.ok) setPending(p.rows || []);
       setAuthed(true);
-    } catch (e2) {
-      setErr((e2 as Error).message);
+    } catch (e) {
+      setErr((e as Error).message);
       setAuthed(false);
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("email");
+    if (q) {
+      setEmail(q);
+      load(q);
+    }
+  }, [load]);
 
   async function approve(key: string) {
     setErr(null);
@@ -63,10 +100,9 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Approve failed");
-      setRows((rs) => rs.filter((r) => r.key !== key));
-      setMsg(
-        `Approved — ${data.credited.hours}h credited to ${data.credited.employee}.`,
-      );
+      setPending((rs) => rs.filter((r) => r.key !== key));
+      setMsg(`Approved — ${data.credited.hours}h credited to ${data.credited.employee}.`);
+      load(email);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -78,10 +114,16 @@ export default function AdminPage() {
     return (
       <div className="wrap">
         <div className="banner">
-          <h1>Admin — Pending Credits</h1>
-          <p>Enter your admin email to review pending holiday credits.</p>
+          <h1>Admin — Flexi Holiday</h1>
+          <p>Enter your admin email to view submissions.</p>
         </div>
-        <form className="card" onSubmit={loadPending}>
+        <form
+          className="card"
+          onSubmit={(e) => {
+            e.preventDefault();
+            load(email);
+          }}
+        >
           <label>
             Admin Email <span className="req">*</span>
           </label>
@@ -94,7 +136,7 @@ export default function AdminPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
           <button type="submit" disabled={busy}>
-            {busy ? "Checking…" : "VIEW PENDING CREDITS"}
+            {busy ? "Checking…" : "VIEW SUBMISSIONS"}
           </button>
           {err && <div className="alert err">{err}</div>}
         </form>
@@ -102,10 +144,12 @@ export default function AdminPage() {
     );
   }
 
+  const shown = filter === "all" ? rows : rows.filter((r) => r.category === filter);
+
   return (
     <div className="wrap">
       <div className="banner">
-        <h1>Admin — Pending Credits</h1>
+        <h1>Admin — Flexi Holiday</h1>
         <p>
           {email} ·{" "}
           <a
@@ -121,10 +165,29 @@ export default function AdminPage() {
         </p>
       </div>
 
+      <div className="tabs">
+        <button
+          type="button"
+          className={tab === "submissions" ? "active" : ""}
+          onClick={() => setTab("submissions")}
+        >
+          Submissions ({counts.all ?? 0})
+        </button>
+        <button
+          type="button"
+          className={tab === "pending" ? "active" : ""}
+          onClick={() => setTab("pending")}
+        >
+          Pending Credits ({pending.length})
+        </button>
+      </div>
+
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong>{rows.length} pending</strong>
-          <button type="button" onClick={() => loadPending()} disabled={busy} style={{ marginTop: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <strong>
+            {tab === "submissions" ? `${shown.length} submission(s)` : `${pending.length} awaiting credit`}
+          </strong>
+          <button type="button" onClick={() => load(email)} disabled={busy} style={{ marginTop: 0 }}>
             {busy ? "Refreshing…" : "Refresh"}
           </button>
         </div>
@@ -132,51 +195,116 @@ export default function AdminPage() {
         {msg && <div className="alert ok">{msg}</div>}
         {err && <div className="alert err">{err}</div>}
 
-        {rows.length === 0 ? (
+        {tab === "submissions" ? (
+          <>
+            <div className="tabs" style={{ marginTop: 16, marginBottom: 0 }}>
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  className={filter === f.key ? "active" : ""}
+                  onClick={() => setFilter(f.key)}
+                  style={{ fontSize: 13, padding: "9px 10px" }}
+                >
+                  {f.label} ({counts[f.key] ?? 0})
+                </button>
+              ))}
+            </div>
+
+            {shown.length === 0 ? (
+              <p className="hint" style={{ marginTop: 16 }}>
+                No submissions in this view.
+              </p>
+            ) : (
+              <div className="balances" style={{ marginTop: 14 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Filed</th>
+                      <th>Employee</th>
+                      <th>Holiday</th>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.dateOfFiling}</td>
+                        <td>{r.employeeName}</td>
+                        <td>
+                          {r.holidayName}
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                            {r.holidayType === "Regular Holiday" ? "Regular" : "Special Non-Working"}
+                          </div>
+                        </td>
+                        <td>{r.fromDate}</td>
+                        <td>{CATEGORY_LABEL[r.category] || r.action}</td>
+                        <td>
+                          {r.category === "earn_credit"
+                            ? r.creditStatus || "PENDING"
+                            : r.category === "double_pay"
+                              ? "For payroll"
+                              : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="hint" style={{ marginTop: 14 }}>
+              Every filing is stored in the Google Sheet; this view reads from it.
+            </p>
+          </>
+        ) : pending.length === 0 ? (
           <p className="hint" style={{ marginTop: 16 }}>
             No pending credits.
           </p>
         ) : (
-          <div className="balances" style={{ marginTop: 14 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Holiday</th>
-                  <th>Worked date</th>
-                  <th>Hrs</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.key}>
-                    <td>{r.employeeName}</td>
-                    <td>{r.holidayName}</td>
-                    <td>{r.workedDate}</td>
-                    <td>{r.hours}</td>
-                    <td>{r.passed ? "Holiday passed" : "Upcoming"}</td>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => approve(r.key)}
-                        disabled={busyKey === r.key}
-                        style={{ marginTop: 0, padding: "6px 14px", fontSize: 13 }}
-                      >
-                        {busyKey === r.key ? "Approving…" : "Approve"}
-                      </button>
-                    </td>
+          <>
+            <div className="balances" style={{ marginTop: 14 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Holiday</th>
+                    <th>Worked date</th>
+                    <th>Hrs</th>
+                    <th>Status</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pending.map((r) => (
+                    <tr key={r.key}>
+                      <td>{r.employeeName}</td>
+                      <td>{r.holidayName}</td>
+                      <td>{r.workedDate}</td>
+                      <td>{r.hours}</td>
+                      <td>{r.passed ? "Holiday passed" : "Upcoming"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => approve(r.key)}
+                          disabled={busyKey === r.key}
+                          style={{ marginTop: 0, padding: "6px 14px", fontSize: 13 }}
+                        >
+                          {busyKey === r.key ? "Approving…" : "Approve"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="hint" style={{ marginTop: 14 }}>
+              Approving posts the credit to Zoho immediately, bypassing the “holiday
+              passed + 8h attendance” checks.
+            </p>
+          </>
         )}
-        <p className="hint" style={{ marginTop: 14 }}>
-          Approving posts the holiday credit to Zoho immediately, bypassing the
-          “holiday passed + 8h attendance” checks.
-        </p>
       </div>
     </div>
   );
