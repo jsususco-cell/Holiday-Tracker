@@ -51,6 +51,7 @@ export default function AdminPage() {
   const [rows, setRows] = useState<Submission[]>([]);
   const [counts, setCounts] = useState<Counts>({});
   const [filter, setFilter] = useState("all");
+  const [holiday, setHoliday] = useState("all");
 
   const [pending, setPending] = useState<Pending[]>([]);
   const [busy, setBusy] = useState(false);
@@ -144,7 +145,24 @@ export default function AdminPage() {
     );
   }
 
-  const shown = filter === "all" ? rows : rows.filter((r) => r.category === filter);
+  // Category filter -> holiday options come from that subset, so the dropdown
+  // never offers a holiday with zero rows in the current view.
+  const byCategory = filter === "all" ? rows : rows.filter((r) => r.category === filter);
+  const holidayOptions = Array.from(
+    new Set(byCategory.map((r) => r.holidayName).filter(Boolean)),
+  ).sort();
+
+  const shown = (holiday === "all"
+    ? byCategory
+    : byCategory.filter((r) => r.holidayName === holiday)
+  )
+    .slice()
+    // Latest on top: newest filing first, then newest holiday date.
+    .sort(
+      (a, b) =>
+        (b.dateOfFiling || "").localeCompare(a.dateOfFiling || "") ||
+        (b.fromDate || "").localeCompare(a.fromDate || ""),
+    );
 
   return (
     <div className="wrap">
@@ -203,13 +221,26 @@ export default function AdminPage() {
                   key={f.key}
                   type="button"
                   className={filter === f.key ? "active" : ""}
-                  onClick={() => setFilter(f.key)}
+                  onClick={() => {
+                    setFilter(f.key);
+                    setHoliday("all");
+                  }}
                   style={{ fontSize: 13, padding: "9px 10px" }}
                 >
                   {f.label} ({counts[f.key] ?? 0})
                 </button>
               ))}
             </div>
+
+            <label style={{ marginTop: 18 }}>Holiday</label>
+            <select value={holiday} onChange={(e) => setHoliday(e.target.value)}>
+              <option value="all">All holidays ({byCategory.length})</option>
+              {holidayOptions.map((h) => (
+                <option key={h} value={h}>
+                  {h} ({byCategory.filter((r) => r.holidayName === h).length})
+                </option>
+              ))}
+            </select>
 
             {shown.length === 0 ? (
               <p className="hint" style={{ marginTop: 16 }}>
