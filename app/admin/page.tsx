@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Pending = {
   key: string;
@@ -59,6 +59,9 @@ export default function AdminPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Default the year once per session, not on every Refresh — otherwise the
+  // admin's chosen year would jump back while they're browsing history.
+  const yearInitialised = useRef(false);
 
   const load = useCallback(async (who: string) => {
     setErr(null);
@@ -72,6 +75,17 @@ export default function AdminPage() {
       if (!s.ok) throw new Error(s.error || "Failed to load submissions");
       setRows(s.rows || []);
       setCounts(s.counts || {});
+
+      // Open on the current year; fall back to the most recent year that has
+      // data (so the view is never empty on arrival).
+      if (!yearInitialised.current) {
+        const years = Array.from(
+          new Set((s.rows || []).map((r: Submission) => (r.fromDate || "").slice(0, 4)).filter(Boolean)),
+        ).sort((a, b) => (b as string).localeCompare(a as string)) as string[];
+        const thisYear = String(new Date().getFullYear());
+        setYear(years.includes(thisYear) ? thisYear : years[0] || "all");
+        yearInitialised.current = true;
+      }
       if (p.ok) setPending(p.rows || []);
       setAuthed(true);
     } catch (e) {
@@ -233,8 +247,12 @@ export default function AdminPage() {
                   type="button"
                   className={filter === f.key ? "active" : ""}
                   onClick={() => {
+                    // Keep the chosen year if the new category still has rows
+                    // in it; otherwise widen to All years rather than show none.
+                    const subset = f.key === "all" ? rows : rows.filter((r) => r.category === f.key);
+                    const yrs = new Set(subset.map((r) => (r.fromDate || "").slice(0, 4)));
                     setFilter(f.key);
-                    setYear("all");
+                    setYear((y) => (y !== "all" && yrs.has(y) ? y : "all"));
                     setHoliday("all");
                   }}
                   style={{ fontSize: 13, padding: "9px 10px" }}
