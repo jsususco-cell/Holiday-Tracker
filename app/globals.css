@@ -82,13 +82,6 @@ body {
   gap: 20px;
   flex-wrap: wrap;
 }
-.site-footer-tag {
-  margin: 8px 0 0;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #9fb0c8;
-}
 .site-footer-meta { text-align: right; font-size: 13px; }
 .site-footer-meta p { margin: 2px 0; }
 .site-footer-meta .muted { color: #8090a8; font-size: 12px; }

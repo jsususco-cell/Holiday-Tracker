@@ -7,9 +7,6 @@ export function SiteFooter() {
       <div className="site-footer-inner">
         <div className="site-footer-brand">
           <Logo height={38} variant="light" />
-          <p className="site-footer-tag">
-            Industrial Construction&nbsp;&nbsp;•&nbsp;&nbsp;Home Elevation
-          </p>
         </div>
         <div className="site-footer-meta">
           <p>Holiday Portal — Work &amp; Benefit Filing</p>
