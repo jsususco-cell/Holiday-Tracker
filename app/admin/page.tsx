@@ -51,6 +51,7 @@ export default function AdminPage() {
   const [rows, setRows] = useState<Submission[]>([]);
   const [counts, setCounts] = useState<Counts>({});
   const [filter, setFilter] = useState("all");
+  const [year, setYear] = useState("all");
   const [holiday, setHoliday] = useState("all");
 
   const [pending, setPending] = useState<Pending[]>([]);
@@ -145,16 +146,26 @@ export default function AdminPage() {
     );
   }
 
-  // Category filter -> holiday options come from that subset, so the dropdown
-  // never offers a holiday with zero rows in the current view.
+  // Filters narrow in order: category -> year -> holiday. Each dropdown's
+  // options come from the preceding subset, so nothing offers an empty result.
+  // Year is the year of the HOLIDAY (fromDate), not the filing date — the same
+  // holiday falls on a different date each year.
   const byCategory = filter === "all" ? rows : rows.filter((r) => r.category === filter);
+
+  const yearOptions = Array.from(
+    new Set(byCategory.map((r) => (r.fromDate || "").slice(0, 4)).filter(Boolean)),
+  ).sort((a, b) => b.localeCompare(a)); // newest year first
+
+  const byYear =
+    year === "all" ? byCategory : byCategory.filter((r) => (r.fromDate || "").startsWith(year));
+
   const holidayOptions = Array.from(
-    new Set(byCategory.map((r) => r.holidayName).filter(Boolean)),
+    new Set(byYear.map((r) => r.holidayName).filter(Boolean)),
   ).sort();
 
   const shown = (holiday === "all"
-    ? byCategory
-    : byCategory.filter((r) => r.holidayName === holiday)
+    ? byYear
+    : byYear.filter((r) => r.holidayName === holiday)
   )
     .slice()
     // Latest on top: newest filing first, then newest holiday date.
@@ -223,6 +234,7 @@ export default function AdminPage() {
                   className={filter === f.key ? "active" : ""}
                   onClick={() => {
                     setFilter(f.key);
+                    setYear("all");
                     setHoliday("all");
                   }}
                   style={{ fontSize: 13, padding: "9px 10px" }}
@@ -232,15 +244,36 @@ export default function AdminPage() {
               ))}
             </div>
 
-            <label style={{ marginTop: 18 }}>Holiday</label>
-            <select value={holiday} onChange={(e) => setHoliday(e.target.value)}>
-              <option value="all">All holidays ({byCategory.length})</option>
-              {holidayOptions.map((h) => (
-                <option key={h} value={h}>
-                  {h} ({byCategory.filter((r) => r.holidayName === h).length})
-                </option>
-              ))}
-            </select>
+            <div className="row" style={{ marginTop: 4 }}>
+              <div style={{ flex: "0 0 150px" }}>
+                <label>Holiday year</label>
+                <select
+                  value={year}
+                  onChange={(e) => {
+                    setYear(e.target.value);
+                    setHoliday("all");
+                  }}
+                >
+                  <option value="all">All years ({byCategory.length})</option>
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>
+                      {y} ({byCategory.filter((r) => (r.fromDate || "").startsWith(y)).length})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Holiday</label>
+                <select value={holiday} onChange={(e) => setHoliday(e.target.value)}>
+                  <option value="all">All holidays ({byYear.length})</option>
+                  {holidayOptions.map((h) => (
+                    <option key={h} value={h}>
+                      {h} ({byYear.filter((r) => r.holidayName === h).length})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             {shown.length === 0 ? (
               <p className="hint" style={{ marginTop: 16 }}>
