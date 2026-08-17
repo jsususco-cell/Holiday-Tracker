@@ -324,7 +324,7 @@ export type FlexiFormRecord = {
 export async function insertFlexiHolidayRecord(
   rec: FlexiFormRecord,
 ): Promise<unknown> {
-  const formLinkName = process.env.ZOHO_FLEXI_FORM_LINKNAME || "Flexi_Holiday";
+  const formLinkName = process.env.ZOHO_FLEXI_FORM_LINKNAME || "flexi_holiday";
   const F = {
     employee: process.env.ZOHO_FLEXI_FIELD_EMPLOYEE || "Employee_ID",
     dateApplied: process.env.ZOHO_FLEXI_FIELD_DATE_APPLIED || "Date_Applied",
