@@ -326,14 +326,15 @@ export async function insertFlexiHolidayRecord(
 ): Promise<unknown> {
   const formLinkName = process.env.ZOHO_FLEXI_FORM_LINKNAME || "flexi_holiday";
   const F = {
-    employee: process.env.ZOHO_FLEXI_FIELD_EMPLOYEE || "Employee_ID",
-    dateApplied: process.env.ZOHO_FLEXI_FIELD_DATE_APPLIED || "Date_Applied",
-    holidayName: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_NAME || "Holiday_Name",
-    holidayDate: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_DATE || "Holiday_Date",
-    holidayType: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_TYPE || "Holiday_Type",
-    action: process.env.ZOHO_FLEXI_FIELD_ACTION || "Action",
-    benefit: process.env.ZOHO_FLEXI_FIELD_BENEFIT || "Benefit",
-    notes: process.env.ZOHO_FLEXI_FIELD_NOTES || "Notes",
+    employee: process.env.ZOHO_FLEXI_FIELD_EMPLOYEE || "employee_id",
+    dateApplied: process.env.ZOHO_FLEXI_FIELD_DATE_APPLIED || "date_applied",
+    holidayName: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_NAME || "holiday_name",
+    holidayDate: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_DATE || "holiday_date",
+    holidayType: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_TYPE || "holiday_type",
+    action: process.env.ZOHO_FLEXI_FIELD_ACTION || "action",
+    benefit: process.env.ZOHO_FLEXI_FIELD_BENEFIT || "benefit",
+    notes: process.env.ZOHO_FLEXI_FIELD_NOTES || "notes",
+    employeeName: process.env.ZOHO_FLEXI_FIELD_EMPLOYEE_NAME || "employee_name",
   };
 
   const inputData: Record<string, unknown> = {
@@ -344,6 +345,7 @@ export async function insertFlexiHolidayRecord(
     [F.action]: rec.action,
   };
   if (rec.employeeCode) inputData[F.employee] = rec.employeeCode;
+  if (rec.employeeName) inputData[F.employeeName] = rec.employeeName;
   if (rec.benefit) inputData[F.benefit] = rec.benefit;
   if (rec.notes) inputData[F.notes] = rec.notes;
 
