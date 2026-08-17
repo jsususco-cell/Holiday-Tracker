@@ -211,6 +211,10 @@ export type ZohoEmployee = {
   id: string; // numeric record id (used by the comp-off API's `employee` field)
   name: string;
   email: string;
+  /** Human employee code, e.g. "BSLLCeh0135" — used to link custom-form records. */
+  employeeCode?: string;
+  firstName?: string;
+  lastName?: string;
 };
 
 /**
@@ -274,12 +278,104 @@ function extractFirstEmployeeRecord(result: unknown): ZohoEmployee | null {
             ? key
             : f.recordId || f.EmployeeID || String(f.Zoho_ID || "");
           const mail = f.EmailID || f.EmailId || f.Email || "";
-          if (id) return { id: String(id), name, email: mail };
+          if (id)
+            return {
+              id: String(id),
+              name,
+              email: mail,
+              employeeCode: f.EmployeeID ? String(f.EmployeeID) : undefined,
+              firstName: f.FirstName || "",
+              lastName: f.LastName || "",
+            };
         }
       }
     }
   }
   return null;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Flexi Holiday custom form (visible inside Zoho People)
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type FlexiFormRecord = {
+  employeeCode?: string; // e.g. BSLLCeh0135
+  employeeName: string;
+  dateOfFilingISO: string; // YYYY-MM-DD
+  holidayName: string;
+  holidayDateISO: string; // YYYY-MM-DD
+  holidayType: string; // "Regular Holiday" | "Special Non-Working Holiday"
+  action: string; // "Take Day Off" | "Report to Work"
+  benefit: string; // "" | "Double Pay" | "Earn Holiday Credit"
+  notes?: string;
+};
+
+/**
+ * Log a submission into the Zoho People "Flexi Holiday" custom form so the HR
+ * team can see, per employee, what was applied for on a given holiday.
+ *
+ * Zoho has NO writable free-text field on the attendance day record (its label
+ * comes from a computed `Status`), so a custom form is the supported way to
+ * surface this inside Zoho.
+ *
+ * Field names are overridable via env in case the form is built with different
+ * labels. Insert failures are reported by the caller, never fatal.
+ */
+export async function insertFlexiHolidayRecord(
+  rec: FlexiFormRecord,
+): Promise<unknown> {
+  const formLinkName = process.env.ZOHO_FLEXI_FORM_LINKNAME || "Flexi_Holiday";
+  const F = {
+    employee: process.env.ZOHO_FLEXI_FIELD_EMPLOYEE || "Employee_ID",
+    dateApplied: process.env.ZOHO_FLEXI_FIELD_DATE_APPLIED || "Date_Applied",
+    holidayName: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_NAME || "Holiday_Name",
+    holidayDate: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_DATE || "Holiday_Date",
+    holidayType: process.env.ZOHO_FLEXI_FIELD_HOLIDAY_TYPE || "Holiday_Type",
+    action: process.env.ZOHO_FLEXI_FIELD_ACTION || "Action",
+    benefit: process.env.ZOHO_FLEXI_FIELD_BENEFIT || "Benefit",
+    notes: process.env.ZOHO_FLEXI_FIELD_NOTES || "Notes",
+  };
+
+  const inputData: Record<string, unknown> = {
+    [F.dateApplied]: toZohoDate(rec.dateOfFilingISO),
+    [F.holidayName]: rec.holidayName,
+    [F.holidayDate]: toZohoDate(rec.holidayDateISO),
+    [F.holidayType]: rec.holidayType,
+    [F.action]: rec.action,
+  };
+  if (rec.employeeCode) inputData[F.employee] = rec.employeeCode;
+  if (rec.benefit) inputData[F.benefit] = rec.benefit;
+  if (rec.notes) inputData[F.notes] = rec.notes;
+
+  const res = await zohoFetch(
+    `/people/api/forms/json/${formLinkName}/insertRecord`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ inputData: JSON.stringify(inputData) }).toString(),
+    },
+  );
+
+  const text = await res.text();
+  let data: {
+    response?: { result?: unknown; message?: string; status?: number; errors?: unknown };
+  } = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    /* non-JSON */
+  }
+
+  // Zoho answers 200 with status:1 + errors on failure, so check the body too.
+  const errs = data.response?.errors;
+  if (!res.ok || errs) {
+    throw new Error(
+      `Zoho form insert failed (${res.status}): ${
+        errs ? JSON.stringify(errs) : data.response?.message || text.slice(0, 200)
+      }`,
+    );
+  }
+  return data.response?.result ?? data;
 }
 
 /* ────────────────────────────────────────────────────────────────────────

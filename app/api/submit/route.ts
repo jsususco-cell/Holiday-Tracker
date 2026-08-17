@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appendToSheet, registerPendingCredit, type SheetRow } from "@/lib/sheet";
-import { resolveEmployee } from "@/lib/zoho";
+import { resolveEmployee, insertFlexiHolidayRecord } from "@/lib/zoho";
 import {
   ACTION_LABELS,
   HOLIDAY_TYPE_LABELS,
@@ -127,10 +127,34 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3) Log the filing into the Zoho People "Flexi Holiday" custom form so HR
+  // can see what each person applied for on a given holiday. (Zoho's attendance
+  // day record has no writable text field, so this is the supported surface.)
+  let zohoForm: { ok: boolean; error?: string } | null = null;
+  try {
+    const emp = await resolveEmployee(body.employeeEmail);
+    await insertFlexiHolidayRecord({
+      employeeCode: emp?.employeeCode,
+      employeeName: body.employeeName || emp?.name || "",
+      dateOfFilingISO: row.dateOfFiling,
+      holidayName: body.holidayName,
+      holidayDateISO: body.holidayDate,
+      holidayType: HOLIDAY_TYPE_LABELS[holidayType],
+      action: ACTION_LABELS[action],
+      benefit: row.workBenefit,
+      notes: body.notes || "",
+    });
+    zohoForm = { ok: true };
+  } catch (err) {
+    // Never fail the submission over this — the sheet row is already saved.
+    zohoForm = { ok: false, error: (err as Error).message };
+  }
+
   return NextResponse.json({
     ok: true,
     sheet: { ok: true },
     creditEarned: wantsCredit,
     pending,
+    zohoForm,
   });
 }
