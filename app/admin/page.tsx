@@ -33,6 +33,10 @@ const FILTERS = [
   { key: "all", label: "All" },
   { key: "earn_credit", label: "Earn Credit" },
   { key: "double_pay", label: "Double Pay" },
+  // Special Non-Working holidays carry no Double Pay / Earn Credit election, so
+  // "Report to Work" on those days is a category in its own right — without this
+  // chip those filings were only reachable under "All".
+  { key: "report_to_work", label: "Report to Work" },
   { key: "take_day_off", label: "Take Day Off" },
 ];
 
